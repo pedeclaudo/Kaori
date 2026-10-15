@@ -161,7 +161,7 @@ class KaoriApplication(Adw.Application):
         self.show_setup_window()
 
     def on_about_action(self, *args) -> None:
-        Adw.AboutDialog(
+        dialog = Adw.AboutDialog(
             application_name=NAME,
             application_icon=APPLICATION_ID,
             developer_name='Riyan Parvez',
@@ -172,7 +172,15 @@ class KaoriApplication(Adw.Application):
             issue_url='https://github.com/riyaniii/Kaori/issues',
             license='GPL-3.0-or-later',
             website='https://github.com/riyaniii/Kaori',
-        ).present(self.props.active_window)
+        )
+        dialog.add_credit_section(
+            name="CI added by",
+            people=[
+                "Oween Unda",
+                "Jaish Khan"
+            ]
+        )
+        dialog.present(self.props.active_window)
 
     def on_preferences_action(self, *args) -> None:
         KaoriPreferences().present(self.props.active_window)
