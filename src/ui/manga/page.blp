@@ -137,10 +137,12 @@ template $KaoriMangaPage : Adw.NavigationPage {
           }
 
           [buttons]
-          Gtk.Box buttons {
+          Adw.WrapBox buttons {
             styles [
-              "linked"
+              "genres"
             ]
+            line-spacing: 6;
+            child-spacing: 6;
             Gtk.Button read {
               styles [
                 "suggested-action"
@@ -164,6 +166,7 @@ template $KaoriMangaPage : Adw.NavigationPage {
               icon-name: "folder-download-symbolic";
               tooltip-text: "Download to your device";
               menu-model: download_menu;
+              styles ["circular"]
             }
           }
 
