@@ -67,6 +67,26 @@
   </screenshots>
 
   <releases>
+    <release version="0.9.5" date="2026-10-16">
+      <url type="details">https://github.com/riyaniii/Kaori/releases/tag/v0.9.5</url>
+      <description translate="no">
+        <ul>
+          <li>Added F and F11 shortcuts to enter and exit fullscreen.</li>
+          <li>Added a badge count for active downloads in the sidebar.</li>
+          <li>Redesigned the manga details page.</li>
+          <li>Manga cards now have a fixed size.</li>
+          <li>Made the extensions page reactive and improved the list styling.</li>
+          <li>Downloads now keep updating in the background.</li>
+          <li>Added the swipe to open chapter panel gesture and Toggle Fullscreen to the shortcuts dialog.</li>
+          <li>Fixed kinetic scrolling conflicting with keyboard navigation.</li>
+          <li>Fixed the title being selected automatically.</li>
+          <li>Increased the minimum sidebar width in the experimental macOS port.</li>
+          <li>Added Buy Me a Coffee support links.</li>
+          <li>Added contributor credits and CONTRIBUTING.md.</li>
+          <li>Updated Suwayomi-Server.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.9.2" date="2026-10-13">
       <url type="details">https://github.com/riyaniii/Kaori/releases/tag/v0.9.2</url>
       <description translate="no">
