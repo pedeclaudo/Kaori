@@ -1,6 +1,6 @@
 import asyncio
 import math
-from gi.repository import Adw, Gio, GLib, GObject, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 from ...integrations import models
 from .base import ReaderBase, adjacent_chapter
@@ -29,6 +29,7 @@ class WebtoonReader(ReaderBase):
     orientation = GObject.Property(type=Gtk.Orientation, default=Gtk.Orientation.VERTICAL)
 
     canvas = Gtk.Template.Child()
+    scrolled_window = Gtk.Template.Child()
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -54,6 +55,13 @@ class WebtoonReader(ReaderBase):
 
         self.connect("notify::chapter-model", self.on_chapter_model_changed)
 
+        user_scroll = Gtk.EventControllerScroll(
+            flags=Gtk.EventControllerScrollFlags.BOTH_AXES,
+            propagation_phase=Gtk.PropagationPhase.CAPTURE,
+        )
+        user_scroll.connect("scroll", self.on_user_scroll)
+        self.add_controller(user_scroll)
+
     def bind_store(self, store: Gio.ListStore):
         pass
 
@@ -76,7 +84,21 @@ class WebtoonReader(ReaderBase):
     def zoom_to(self, value, x, y):
         self.canvas.set_zoom_anchored(value, x, y)
 
+    def cancel_kinetic(self):
+        self.scrolled_window.set_kinetic_scrolling(False)
+        self.scrolled_window.set_kinetic_scrolling(True)
+
+    def cancel_keyboard_scroll(self):
+        self.scroll_direction = 0
+        self.scroll_velocity = 0.0
+        self.cancel_page_scroll()
+
+    def on_user_scroll(self, controller, dx, dy):
+        self.cancel_keyboard_scroll()
+        return Gdk.EVENT_PROPAGATE
+
     def scroll_page(self, direction):
+        self.cancel_kinetic()
         horizontal = self.orientation == Gtk.Orientation.HORIZONTAL
         size = self.canvas.get_width() if horizontal else self.canvas.get_height()
         distance = direction * size * PAGE_SCROLL_RATIO
@@ -112,6 +134,8 @@ class WebtoonReader(ReaderBase):
             self.page_animation = None
 
     def start_scrolling(self, direction):
+        if direction != self.scroll_direction:
+            self.cancel_kinetic()
         self.cancel_page_scroll()
         self.scroll_direction = direction
         if not self.tick_id:

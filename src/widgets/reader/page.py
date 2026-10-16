@@ -99,10 +99,8 @@ class ReaderPage(Adw.NavigationPage):
             action_group.add_action(action)
         self.insert_action_group("reader", action_group)
 
-        key_controller = Gtk.EventControllerKey(propagation_phase=Gtk.PropagationPhase.CAPTURE)
-        key_controller.connect("key-pressed", self.on_key_pressed)
-        key_controller.connect("key-released", self.on_key_released)
-        self.add_controller(key_controller)
+        self.key_root = None
+        self.key_controller = None
 
         focus_controller = Gtk.EventControllerFocus()
         focus_controller.connect("leave", self.on_focus_leave)
@@ -148,17 +146,51 @@ class ReaderPage(Adw.NavigationPage):
         for obj, handler_id in self.root_handlers:
             obj.disconnect(handler_id)
         self.root_handlers = []
+        self.detach_key_controller()
 
         root = self.get_root()
         if root is None:
             return
 
+        self.attach_key_controller(root)
+
         split_view = root.overlay_split_view
         self.root_handlers = [
-            (root, root.connect("notify::visible-dialog", self.update_header)),
+            (root, root.connect("notify::visible-dialog", self.on_dialog_changed)),
             (split_view, split_view.connect("notify::show-sidebar", self.update_header)),
         ]
         self.update_header()
+
+    def attach_key_controller(self, root):
+        controller = Gtk.EventControllerKey(propagation_phase=Gtk.PropagationPhase.CAPTURE)
+        controller.connect("key-pressed", self.on_key_pressed)
+        controller.connect("key-released", self.on_key_released)
+        root.add_controller(controller)
+        self.key_root = root
+        self.key_controller = controller
+
+    def detach_key_controller(self):
+        if self.key_root is not None and self.key_controller is not None:
+            self.key_root.remove_controller(self.key_controller)
+        self.key_root = None
+        self.key_controller = None
+
+    def on_dialog_changed(self, *args):
+        self.update_header()
+        root = self.get_root()
+        if root is not None and root.get_visible_dialog() is None:
+            GLib.idle_add(self.restore_focus)
+
+    def keys_active(self):
+        root = self.get_root()
+        if root is None or not self.get_mapped():
+            return False
+        if root.get_visible_dialog() is not None:
+            return False
+        focus = root.get_focus()
+        if focus is None or focus is self:
+            return True
+        return focus.is_ancestor(self) and not isinstance(focus, Gtk.Editable)
 
     def on_pointer_motion(self, controller, x, y):
         inside = y <= HEADER_HOVER_HEIGHT
@@ -240,6 +272,7 @@ class ReaderPage(Adw.NavigationPage):
         self.change_chapter(direction, LAST_PAGE if direction < 0 else None)
 
     def on_unrealize(self, page):
+        self.detach_key_controller()
         self.cancel_header_hide()
         for task in (self.load_task, self.settings_task):
             if task is not None:
@@ -256,8 +289,9 @@ class ReaderPage(Adw.NavigationPage):
 
     def restore_focus(self):
         root = self.get_root()
-        if root is not None and root.get_focus() is None:
-            self.active_reader.child_focus(Gtk.DirectionType.TAB_FORWARD)
+        if root is not None and self.get_mapped() and root.get_visible_dialog() is None:
+            if root.get_focus() is None:
+                self.active_reader.child_focus(Gtk.DirectionType.TAB_FORWARD)
         return GLib.SOURCE_REMOVE
 
     def sync_store(self):
@@ -269,6 +303,9 @@ class ReaderPage(Adw.NavigationPage):
         self.start_load(chapter, resume_position=self.position)
 
     def on_key_pressed(self, controller, keyval, keycode, state):
+        if not self.keys_active():
+            return False
+
         rtl = self.direction == Gtk.TextDirection.RTL
 
         if keyval in CTRL_KEYS:
@@ -332,6 +369,8 @@ class ReaderPage(Adw.NavigationPage):
     def on_key_released(self, controller, keyval, keycode, state):
         if keyval in CTRL_KEYS:
             self.held_ctrl_keys.discard(keyval)
+            return
+        if not self.keys_active():
             return
         if self.scroll_direction(keyval) == self.webtoon.scroll_direction:
             self.webtoon.stop_scrolling()
