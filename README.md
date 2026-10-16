@@ -15,7 +15,11 @@ The name Kaori is a small tribute to Kaori Miyazono from *Your Lie in April*, a 
 
 Kaori connects to/runs [Suwayomi](https://github.com/Suwayomi/Suwayomi-Server) as the backend.
 
-<script type="text/javascript" src="https://cdnjs.buymeacoffee.com/1.0.0/button.prod.min.js" data-name="bmc-button" data-slug="riyanparvez" data-color="#FFDD00" data-emoji=""  data-font="Comic" data-text="Buy me a coffee" data-outline-color="#000000" data-font-color="#000000" data-coffee-color="#ffffff" ></script>
+<p align="start">
+  <a href="https://www.buymeacoffee.com/riyanparvez">
+    <img src="assets/badges/bmc.svg" height="120">
+  </a>
+</p>
 
 ### Installation
 You can install Kaori as flatpak on Linux or a .DMG on macOS 
