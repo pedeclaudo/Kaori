@@ -17,6 +17,7 @@ HEADER_HOVER_HEIGHT = 48
 HEADER_HIDE_DELAY = 1500
 
 CTRL_KEYS = (Gdk.KEY_Control_L, Gdk.KEY_Control_R)
+FULLSCREEN_KEYS = (Gdk.KEY_f, Gdk.KEY_F)
 
 ORIENTATIONS = {
     "vertical": Gtk.Orientation.VERTICAL,
@@ -192,6 +193,15 @@ class ReaderPage(Adw.NavigationPage):
             return True
         return focus.is_ancestor(self) and not isinstance(focus, Gtk.Editable)
 
+    def toggle_fullscreen(self):
+        root = self.get_root()
+        if root is None:
+            return
+        if root.is_fullscreen():
+            root.unfullscreen()
+        else:
+            root.fullscreen()
+
     def on_pointer_motion(self, controller, x, y):
         inside = y <= HEADER_HOVER_HEIGHT
         if inside != self.pointer_in_zone:
@@ -316,6 +326,10 @@ class ReaderPage(Adw.NavigationPage):
 
         if keyval == Gdk.KEY_Escape:
             self.go_back()
+            return True
+
+        if keyval == Gdk.KEY_F11 or (keyval in FULLSCREEN_KEYS and not ctrl):
+            self.toggle_fullscreen()
             return True
 
         if ctrl and keyval in (Gdk.KEY_plus, Gdk.KEY_equal, Gdk.KEY_KP_Add):
