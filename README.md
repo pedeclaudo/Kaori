@@ -16,7 +16,7 @@ The name Kaori is a small tribute to Kaori Miyazono from *Your Lie in April*, a 
 Kaori connects to/runs [Suwayomi](https://github.com/Suwayomi/Suwayomi-Server) as the backend.
 
 ### Installation
-You can install Kaori as flatpak
+You can install Kaori as flatpak on Linux or a .DMG on macOS 
 <table>
   <tr>
   <td>
@@ -30,6 +30,13 @@ You can install Kaori as flatpak
     <p>
       <a href="https://github.com/riyaniii/Kaori/releases">
         <img src="assets/badges/github-stable.svg" height="120">
+      </a>
+    </p>
+  </td>
+  <td>
+    <p>
+      <a href="https://github.com/riyaniii/Kaori/releases">
+        <img src="assets/badges/macOS.png" height="100">
       </a>
     </p>
   </td>
@@ -64,5 +71,18 @@ You can install Kaori as flatpak
       <br>
       <strong>Downloads</strong>
     </td>
+  </tr>
+</table>
+
+## Code of Conduct
+This project follows the [GNOME Code of Conduct](https://conduct.gnome.org/)
+
+## Special Thanks to
+<table>
+  <tr>
+    <td>Jaish Khan (for the macOS CI)</td>
+  </tr>
+  <tr>
+    <td>Oween Unda (for the Flatpak CI)</td>
   </tr>
 </table>
