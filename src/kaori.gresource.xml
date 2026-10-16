@@ -16,6 +16,7 @@
     <file>icons/up-symbolic.svg</file>
     <file>icons/panel-right-symbolic.svg</file>
     <file>icons/translate-symbolic.svg</file>
+    <file>icons/keys-symbolic.svg</file>
     <file>icons/chain-link-symbolic.svg</file>
 
     <file alias="window.ui">ui/window.ui</file>
