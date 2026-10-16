@@ -176,8 +176,6 @@ class MangaPage(Adw.NavigationPage):
 
     @Gtk.Template.Callback()
     def get_read_button_label(self, obj, chapter):
-        if chapter is None:
-            return "..."
         if chapter.source_order > 1:
             return "Continue"
         return "Start"
