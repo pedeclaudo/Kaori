@@ -11,5 +11,15 @@
 			<summary>Suwayomi server URL</summary>
 			<description>The URL of the Suwayomi server the app connects to. Only meaningful when suwayomi-mode is "remote".</description>
 		</key>
+		<key name="run-in-background" type="b">
+			<default>true</default>
+			<summary>Keep the server running in the background</summary>
+			<description>Keep the local Suwayomi server and the app process running after the window is closed.</description>
+		</key>
+		<key name="run-on-startup" type="b">
+			<default>true</default>
+			<summary>Start the server on login</summary>
+			<description>Start the local Suwayomi server in the background when the user logs in.</description>
+		</key>
 	</schema>
 </schemalist>

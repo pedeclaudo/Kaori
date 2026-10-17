@@ -76,8 +76,20 @@ template $KaoriPreferencesDialog : Adw.PreferencesDialog {
         }
       }
     }
+
     Adw.PreferencesGroup {
       title: _("Server");
+
+      Adw.SwitchRow background_row {
+        title: _("Keep Server Running in Background");
+        subtitle: _("Keep the local server running after the window is closed");
+      }
+
+      Adw.SwitchRow startup_row {
+        title: _("Run on Startup");
+        subtitle: _("Start the server automatically when you log in");
+        sensitive: bind background_row.active;
+      }
 
       Adw.ActionRow {
         title: _("Suwayomi Instance");

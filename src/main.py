@@ -1,6 +1,5 @@
 import asyncio
 import os
-import subprocess
 import sys
 import time
 
@@ -17,25 +16,17 @@ from gql.transport.exceptions import TransportError
 
 from .constants import NAME, set_version
 from .integrations import Suwayomi
+from .server import LocalServer
+from .tray import Entry, Tray
 from .widgets import KaoriWindow, build_shortcuts
 from .widgets.preferences import KaoriPreferences
 from .widgets.setup import SetupWindow
 
 APPLICATION_ID = 'io.github.riyaniii.Kaori'
-JAR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                   'Suwayomi-Server.jar')
 
-LOCAL_URL = 'http://localhost:4567'
 READY_TIMEOUT = 90
 POLL_INTERVAL = 0.5
-
-SERVER_CMD = [
-    'java',
-    '-Dsuwayomi.tachidesk.config.server.systemTrayEnabled=false',
-    '-Dsuwayomi.tachidesk.config.server.initialOpenInBrowserEnabled=false',
-    '-Dsuwayomi.tachidesk.config.server.kcefEnabled=false',
-    '-jar', JAR,
-]
+AUTOSTART_COMMAND = ['kaori', '--background']
 
 
 def run_until_done(coro, timeout: float) -> None:
@@ -58,10 +49,25 @@ class KaoriApplication(Adw.Application):
         self.version = version
         self.settings = Gio.Settings(schema_id=APPLICATION_ID)
         self.suwayomi = Suwayomi()
-        self.server: subprocess.Popen | None = None
-        self.server_log = None
+        self.server = LocalServer()
+        self.tray = None
+        self.background_start = False
+        self.background_held = False
 
-        self.create_action('quit', lambda *_: self.quit(), ['<control>q'])
+        self.add_main_option('background', 0, GLib.OptionFlags.NONE,
+                             GLib.OptionArg.NONE,
+                             'Start the server without opening a window', None)
+        self.connect('handle-local-options', self.on_handle_local_options)
+        self.settings.connect('changed::run-in-background',
+                              lambda *args: self.apply_background_settings())
+        self.settings.connect('changed::run-on-startup',
+                              lambda *args: self.apply_background_settings())
+        self.suwayomi.connect('notify::downloader-state',
+                              lambda *args: self.refresh_tray())
+        self.suwayomi.download_queue.connect('items-changed',
+                                             lambda *args: self.refresh_tray())
+
+        self.create_action('quit', lambda *args: self.quit(), ['<control>q'])
         self.create_action('preferences', self.on_preferences_action, ['<control>comma'])
         self.create_action('shortcuts', self.on_shortcuts_action,
                            ['<control>question', '<control>slash'])
@@ -69,6 +75,8 @@ class KaoriApplication(Adw.Application):
         self.create_action('change_instance', self.on_change_instance_action)
 
     def do_activate(self) -> None:
+        background_start, self.background_start = self.background_start, False
+
         if win := self.props.active_window:
             win.present()
             return
@@ -78,82 +86,195 @@ class KaoriApplication(Adw.Application):
             self.show_setup_window()
             return
 
+        hidden = (background_start
+                  and mode == 'local'
+                  and self.settings.get_boolean('run-in-background'))
+
         self.hold()
-        asyncio.create_task(
-            self.launch_or_setup(mode, self.settings.get_string('suwayomi-url')))
+        asyncio.create_task(self.launch_or_setup(
+            mode, self.settings.get_string('suwayomi-url'), not hidden))
 
     def do_shutdown(self) -> None:
         run_until_done(self.suwayomi.close(), 5)
-        self.stop_server()
+        self.set_tray(False)
+        self.server.stop()
         Adw.Application.do_shutdown(self)
 
-    def start_server(self) -> None:
-        
-        
-        log_dir = os.path.join(GLib.get_user_cache_dir(), 'kaori')
-        os.makedirs(log_dir, exist_ok=True)
-        self.server_log = open(os.path.join(log_dir, 'server.log'), 'ab')
-        self.server = subprocess.Popen(
-            SERVER_CMD, stdout=self.server_log, stderr=subprocess.STDOUT)
+    def on_handle_local_options(self, app, options) -> int:
+        if options.contains('background'):
+            self.background_start = True
+        return -1
 
-    def stop_server(self) -> None:
-        if self.server:
-            self.server.terminate()
-            self.server.wait()
-            self.server = None
-        if self.server_log:
-            self.server_log.close()
-            self.server_log = None
-
-    async def launch_or_setup(self, mode: str, url: str) -> None:
+    async def launch_or_setup(self, mode: str, url: str, show_window: bool = True) -> None:
         try:
-            if not await self.launch(mode, url):
+            if not await self.launch(mode, url, show_window):
                 self.show_setup_window(
                     error="Couldn't reconnect. Check your setup and try again.")
         except Exception as e:
-            
-            
-            self.stop_server()
+            self.server.stop()
             self.show_setup_window(error=f"Failed to start: {e}")
         finally:
             self.release()
 
-    async def launch(self, mode: str, url: str) -> bool:
+    async def launch(self, mode: str, url: str, show_window: bool = True) -> bool:
         local = mode == 'local'
-        if local:
-            self.start_server()
-        self.suwayomi.reconnect(LOCAL_URL if local else url)
+        if local and not self.server.running:
+            self.server.start()
+        self.suwayomi.reconnect(self.server.url if local else url)
 
         if not await self.wait_for_server():
             await self.suwayomi.disconnect()
-            self.stop_server()
+            self.server.stop()
             return False
 
         self.settings.set_string('suwayomi-mode', mode)
         self.settings.set_string('suwayomi-url', '' if local else url)
-        KaoriWindow(application=self).present()
+        if show_window:
+            KaoriWindow(application=self).present()
+        self.apply_background_settings()
         return True
 
     async def wait_for_server(self) -> bool:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + READY_TIMEOUT
         while loop.time() < deadline:
-            if self.server and self.server.poll() is not None:
+            if self.server.exited:
                 return False
             try:
                 if await self.suwayomi.getServerSettings():
                     return True
             except (TransportError, OSError, TimeoutError):
-                
                 pass
             await asyncio.sleep(POLL_INTERVAL)
         return False
+
+    def set_background_hold(self, held: bool) -> None:
+        if held and not self.background_held:
+            self.hold()
+        elif not held and self.background_held:
+            self.release()
+        self.background_held = held
+
+    def set_tray(self, shown: bool) -> None:
+        if shown and not self.tray:
+            self.tray = Tray(APPLICATION_ID, NAME, self.tray_entries())
+        elif not shown and self.tray:
+            self.tray.close()
+            self.tray = None
+
+    def refresh_tray(self) -> None:
+        if self.tray:
+            self.tray.set_entries(self.tray_entries())
+
+    def downloads_label(self) -> str:
+        count = self.suwayomi.download_queue.get_n_items()
+        if not count:
+            return 'Downloads'
+        if self.suwayomi.downloader_state == 'STARTED':
+            return f'Downloads ({count})'
+        return f'Downloads ({count}, paused)'
+
+    def tray_entries(self) -> list:
+        count = self.suwayomi.download_queue.get_n_items()
+        running = self.suwayomi.downloader_state == 'STARTED'
+        downloads = Entry(
+            self.downloads_label(),
+            children=[
+                Entry('Pause Downloads' if running else 'Resume Downloads',
+                      self.toggle_downloads, running or count > 0),
+                Entry('Clear Download Queue', self.clear_downloads, count > 0),
+            ],
+        )
+        return [
+            Entry('Open Kaori', self.activate),
+            Entry(separator=True),
+            downloads,
+            Entry(separator=True),
+            Entry('Open Web Interface', self.open_web_interface),
+            Entry(separator=True),
+            Entry('Quit', self.quit),
+        ]
+
+    def toggle_downloads(self) -> None:
+        if self.suwayomi.downloader_state == 'STARTED':
+            asyncio.create_task(self.suwayomi.stopDownloader())
+        else:
+            asyncio.create_task(self.suwayomi.startDownloader())
+
+    def clear_downloads(self) -> None:
+        asyncio.create_task(self.suwayomi.clearDownloader())
+
+    def open_web_interface(self) -> None:
+        Gio.AppInfo.launch_default_for_uri(self.suwayomi.url, None)
+
+    def apply_background_settings(self) -> None:
+        local = self.settings.get_string('suwayomi-mode') == 'local'
+        background = (sys.platform == 'linux' and local
+                      and self.settings.get_boolean('run-in-background'))
+        autostart = background and self.settings.get_boolean('run-on-startup')
+
+        self.set_background_hold(background)
+        self.set_tray(background)
+        if background:
+            self.suwayomi.startPolling()
+        self.sync_autostart(background, autostart)
+
+    def sync_autostart(self, background: bool, autostart: bool) -> None:
+        if sys.platform != 'linux':
+            return
+        if os.path.exists('/.flatpak-info'):
+            self.request_background_portal(background, autostart)
+        else:
+            self.write_autostart_file(autostart)
+
+    def request_background_portal(self, background: bool, autostart: bool) -> None:
+        options = {
+            'reason': GLib.Variant('s', 'Keep the Suwayomi server running'),
+            'background': GLib.Variant('b', background),
+            'autostart': GLib.Variant('b', autostart),
+            'commandline': GLib.Variant('as', AUTOSTART_COMMAND),
+            'dbus-activatable': GLib.Variant('b', False),
+        }
+
+        def done(bus, result):
+            try:
+                bus.call_finish(result)
+            except GLib.Error as e:
+                print("Background portal request failed:", e.message)
+
+        try:
+            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+            bus.call(
+                'org.freedesktop.portal.Desktop',
+                '/org/freedesktop/portal/desktop',
+                'org.freedesktop.portal.Background',
+                'RequestBackground',
+                GLib.Variant('(sa{sv})', ('', options)),
+                None, Gio.DBusCallFlags.NONE, -1, None, done)
+        except GLib.Error as e:
+            print("Background portal unavailable:", e.message)
+
+    def write_autostart_file(self, autostart: bool) -> None:
+        path = os.path.join(GLib.get_user_config_dir(), 'autostart',
+                            f'{APPLICATION_ID}.desktop')
+        if autostart:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w') as file:
+                file.write('[Desktop Entry]\n'
+                           'Type=Application\n'
+                           f'Name={NAME}\n'
+                           f'Exec={" ".join(AUTOSTART_COMMAND)}\n'
+                           'X-GNOME-Autostart-enabled=true\n')
+        elif os.path.exists(path):
+            os.remove(path)
 
     def show_setup_window(self, error: str | None = None) -> None:
         SetupWindow(application=self, error=error).present()
 
     def on_change_instance_action(self, *args) -> None:
-        self.stop_server()
+        self.server.stop()
+        self.set_background_hold(False)
+        self.set_tray(False)
         if win := self.props.active_window:
             for dialog in list(win.get_dialogs()):
                 dialog.force_close()

@@ -85,7 +85,9 @@ kaori_sources = [
   '__init__.py',
   'main.py',
   'actions.py',
-  'constants.py'
+  'constants.py',
+  'server.py',
+  'tray.py'
 ]
 
 install_data(kaori_sources, install_dir: moduledir)

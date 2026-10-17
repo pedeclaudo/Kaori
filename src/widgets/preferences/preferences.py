@@ -1,4 +1,6 @@
 import asyncio
+import sys
+
 from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from .extension_stores import ExtensionStoresDialog
@@ -18,13 +20,24 @@ class KaoriPreferences(Adw.PreferencesDialog):
     location_row = Gtk.Template.Child()
     orientation_row = Gtk.Template.Child()
     direction_row = Gtk.Template.Child()
+    background_row = Gtk.Template.Child()
+    startup_row = Gtk.Template.Child()
 
     loaded = GObject.Property(type=bool, default=False)
     mode_stack = GObject.Property(type=Gtk.Widget)
 
     def __init__(self):
         super().__init__()
-        self.suwayomi = Gio.Application.get_default().suwayomi
+        app = Gio.Application.get_default()
+        self.suwayomi = app.suwayomi
+
+        local = sys.platform == 'linux' and app.settings.get_string('suwayomi-mode') == 'local'
+        self.background_row.set_visible(local)
+        self.startup_row.set_visible(local)
+        app.settings.bind('run-in-background', self.background_row, 'active',
+                          Gio.SettingsBindFlags.DEFAULT)
+        app.settings.bind('run-on-startup', self.startup_row, 'active',
+                          Gio.SettingsBindFlags.DEFAULT)
 
         self.mode_stack = Adw.ViewStack()
         for name, title, icon in MODES:
@@ -80,7 +93,7 @@ class KaoriPreferences(Adw.PreferencesDialog):
     def on_location_selected(self, dialog, result):
         try:
             folder = dialog.select_folder_finish(result)
-        except GLib.Error:  
+        except GLib.Error:
             return
         self.location_row.set_subtitle(folder.get_basename())
         asyncio.create_task(self.suwayomi.setDownloadsPath(folder.get_path()))
