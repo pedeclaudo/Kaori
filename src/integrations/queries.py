@@ -27,6 +27,31 @@ EXTENSION_FIELDS = {
 }
 EXTENSION_FULL_FIELDS = "pkgName\niconUrl\n" + "\n".join(EXTENSION_FIELDS)
 
+SERVER_SETTINGS = (
+    'downloadAsCbz',
+    'downloadsPath',
+    'globalUpdateInterval',
+    'backupPath',
+    'backupTime',
+    'backupInterval',
+    'backupTTL',
+    'maxSourcesInParallel',
+    'localSourcePath',
+    'flareSolverrEnabled',
+    'flareSolverrUrl',
+    'flareSolverrTimeout',
+    'flareSolverrSessionName',
+    'flareSolverrSessionTtl',
+    'flareSolverrAsResponseFallback',
+    'socksProxyEnabled',
+    'socksProxyVersion',
+    'socksProxyHost',
+    'socksProxyPort',
+    'socksProxyUsername',
+    'socksProxyPassword',
+)
+SERVER_SETTINGS_FIELDS = "\n".join(SERVER_SETTINGS)
+
 MANGA_CORE_FIELDS = """
   id
   title
@@ -358,8 +383,7 @@ query GetSourceFilters($id: LongString!) {
 GET_SERVER_SETTINGS = gql("""
 query GetServerSettings {
   settings {
-    downloadAsCbz
-    downloadsPath
+    """ + SERVER_SETTINGS_FIELDS + """
   }
 }
 """)
@@ -368,8 +392,7 @@ SET_SERVER_SETTINGS = gql("""
 mutation SetServerSettings($settings: PartialSettingsTypeInput!) {
   setSettings(input: {settings: $settings}) {
     settings {
-      downloadAsCbz
-      downloadsPath
+      """ + SERVER_SETTINGS_FIELDS + """
     }
   }
 }
