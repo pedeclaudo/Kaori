@@ -3,8 +3,8 @@ using Adw 1;
 
 template $KaoriPreferencesDialog : Adw.PreferencesDialog {
   Adw.PreferencesPage {
-    title: _("General");
-    icon-name: "preferences-system-symbolic";
+    title: _("Reader");
+    icon-name: "view-paged-symbolic";
 
     Adw.PreferencesGroup {
       title: _("Reading");
@@ -33,11 +33,15 @@ template $KaoriPreferencesDialog : Adw.PreferencesDialog {
         sensitive: bind template.loaded;
         notify::selected => $on_direction_changed();
       }
-
     }
+  }
+
+  Adw.PreferencesPage {
+    title: _("Downloads");
+    icon-name: "folder-download-symbolic";
 
     Adw.PreferencesGroup {
-      title: _("Downloads");
+      title: _("Storage");
 
       Adw.SwitchRow cbz_row {
         title: _("Save as CBZ Archive");
@@ -59,6 +63,26 @@ template $KaoriPreferencesDialog : Adw.PreferencesDialog {
         }
       }
     }
+  }
+
+  Adw.PreferencesPage {
+    title: _("Server");
+    icon-name: "network-server-symbolic";
+
+    Adw.PreferencesGroup background_group {
+      title: _("Background");
+
+      Adw.SwitchRow background_row {
+        title: _("Keep Server Running in Background");
+        subtitle: _("Keep the local server running after the window is closed");
+      }
+
+      Adw.SwitchRow startup_row {
+        title: _("Run on Startup");
+        subtitle: _("Start the server automatically when you log in");
+        sensitive: bind background_row.active;
+      }
+    }
 
     Adw.PreferencesGroup {
       title: _("Extensions");
@@ -78,18 +102,7 @@ template $KaoriPreferencesDialog : Adw.PreferencesDialog {
     }
 
     Adw.PreferencesGroup {
-      title: _("Server");
-
-      Adw.SwitchRow background_row {
-        title: _("Keep Server Running in Background");
-        subtitle: _("Keep the local server running after the window is closed");
-      }
-
-      Adw.SwitchRow startup_row {
-        title: _("Run on Startup");
-        subtitle: _("Start the server automatically when you log in");
-        sensitive: bind background_row.active;
-      }
+      title: _("Instance");
 
       Adw.ActionRow {
         title: _("Suwayomi Instance");

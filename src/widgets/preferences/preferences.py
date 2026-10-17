@@ -20,6 +20,7 @@ class KaoriPreferences(Adw.PreferencesDialog):
     location_row = Gtk.Template.Child()
     orientation_row = Gtk.Template.Child()
     direction_row = Gtk.Template.Child()
+    background_group = Gtk.Template.Child()
     background_row = Gtk.Template.Child()
     startup_row = Gtk.Template.Child()
 
@@ -32,8 +33,7 @@ class KaoriPreferences(Adw.PreferencesDialog):
         self.suwayomi = app.suwayomi
 
         local = sys.platform == 'linux' and app.settings.get_string('suwayomi-mode') == 'local'
-        self.background_row.set_visible(local)
-        self.startup_row.set_visible(local)
+        self.background_group.set_visible(local)
         app.settings.bind('run-in-background', self.background_row, 'active',
                           Gio.SettingsBindFlags.DEFAULT)
         app.settings.bind('run-on-startup', self.startup_row, 'active',
