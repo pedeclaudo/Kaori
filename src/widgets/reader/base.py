@@ -1,25 +1,31 @@
 import asyncio
+from gettext import gettext as _
 
-from gi.repository import Adw, Gdk, Gio, GObject, Gtk
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
 
 from ...integrations import models
 
 ZOOM_MIN = 1.0
+WEBTOON_ZOOM_MIN = 0.5
 ZOOM_MAX = 4.0
 ZOOM_STEP = 1.25
 PIXELS_PER_STEP = 40
+PREFETCH_SPREADS = 2
+LAST_PAGE = 10**6
 
 
 def adjacent_chapter(manga, chapter, direction):
     if manga is None or chapter is None:
         return None
+
     found, index = manga.chapters.find(chapter)
     if not found:
         return None
-    index += direction
-    if 0 <= index < manga.chapters.get_n_items():
-        return manga.chapters.get_item(index)
-    return None
+
+    new_index = index + direction
+    if new_index < 0 or new_index >= manga.chapters.get_n_items():
+        return None
+    return manga.chapters.get_item(new_index)
 
 
 class ReaderBase(Adw.Bin):
@@ -27,8 +33,6 @@ class ReaderBase(Adw.Bin):
 
     chapter_model = GObject.Property(type=models.Chapter)
     manga_model = GObject.Property(type=models.Manga)
-
-    step = 1
 
     @GObject.Signal(arg_types=(int,))
     def chapter_requested(self, direction):
@@ -71,11 +75,23 @@ class ReaderBase(Adw.Bin):
         self.set_direction(value)
 
     @property
+    def step(self):
+        return 1
+
+    @property
     def page_count(self):
-        return self.chapter_model.page_count if self.chapter_model else 0
+        if self.chapter_model:
+            return self.chapter_model.page_count
+        return 0
 
     def bind_store(self, store: Gio.ListStore):
         self.store = store
+
+    def show_toast(self, message):
+        self.activate_action("app.show_toast", GLib.Variant("s", message))
+
+    def retry_failed(self):
+        pass
 
     def next_page(self):
         self.position += 1
@@ -87,7 +103,9 @@ class ReaderBase(Adw.Bin):
         raise NotImplementedError
 
     def zoom_by(self, factor):
-        self.zoom_to(self.zoom * factor, self.get_width() / 2, self.get_height() / 2)
+        center_x = self.get_width() / 2
+        center_y = self.get_height() / 2
+        self.zoom_to(self.zoom * factor, center_x, center_y)
 
     def zoom_in(self):
         self.zoom_by(ZOOM_STEP)
@@ -102,11 +120,17 @@ class ReaderBase(Adw.Bin):
         self.pointer = (x, y)
 
     def on_scroll(self, controller, dx, dy):
-        if not controller.get_current_event_state() & Gdk.ModifierType.CONTROL_MASK:
+        state = controller.get_current_event_state()
+        if not state & Gdk.ModifierType.CONTROL_MASK:
             return Gdk.EVENT_PROPAGATE
-        wheel = controller.get_unit() == Gdk.ScrollUnit.WHEEL
-        steps = dy if wheel else dy / PIXELS_PER_STEP
-        self.zoom_to(self.zoom * ZOOM_STEP ** -steps, *self.pointer)
+
+        if controller.get_unit() == Gdk.ScrollUnit.WHEEL:
+            steps = dy
+        else:
+            steps = dy / PIXELS_PER_STEP
+
+        pointer_x, pointer_y = self.pointer
+        self.zoom_to(self.zoom * ZOOM_STEP ** -steps, pointer_x, pointer_y)
         return Gdk.EVENT_STOP
 
     def on_pinch_begin(self, gesture, sequence):
@@ -114,8 +138,8 @@ class ReaderBase(Adw.Bin):
         self.pinch_start = self.zoom
 
     def on_pinch_scale_changed(self, gesture, scale):
-        ok, x, y = gesture.get_bounding_box_center()
-        if ok:
+        found, x, y = gesture.get_bounding_box_center()
+        if found:
             self.zoom_to(self.pinch_start * scale, x, y)
 
     def on_double_tap(self, gesture, n_press, x, y):
@@ -130,7 +154,8 @@ class PagedReader(ReaderBase):
         super().__init__(**kwargs)
         self.zoom = 1.0
         self.current_position = 0
-        self.tasks = []
+        self.tasks = {}
+        self.failed_pages = set()
         self.groups = {}
         self.drag_origin = (0.0, 0.0)
 
@@ -143,6 +168,8 @@ class PagedReader(ReaderBase):
         drag.connect("drag-update", self.on_drag_update)
         drag.connect("drag-end", self.on_drag_end)
         self.add_controller(drag)
+
+        self.connect("map", self.on_mapped)
 
     @property
     def pictures(self):
@@ -170,6 +197,7 @@ class PagedReader(ReaderBase):
         if count == 0:
             self.current_position = 0
             return
+
         value = max(0, min(value, count - 1))
         self.current_position = value - value % self.step
         self.show_current()
@@ -178,6 +206,7 @@ class PagedReader(ReaderBase):
         count = self.page_count
         if count == 0:
             return
+
         if self.current_position + self.step >= count:
             self.emit("chapter-requested", 1)
         else:
@@ -186,13 +215,16 @@ class PagedReader(ReaderBase):
     def previous_page(self):
         if self.page_count == 0:
             return
+
         if self.current_position == 0:
             self.emit("chapter-requested", -1)
         else:
             self.position -= self.step
 
     def page_at(self, index):
-        return self.store.get_item(index) if 0 <= index < self.page_count else None
+        if 0 <= index < self.page_count:
+            return self.store.get_item(index)
+        return None
 
     def binding_group(self, picture):
         group = self.groups.get(picture)
@@ -202,26 +234,64 @@ class PagedReader(ReaderBase):
             self.groups[picture] = group
         return group
 
-    def show_current(self):
-        self.reset_zoom()
-        for task in self.tasks:
-            task.cancel()
-        self.tasks = []
+    def on_mapped(self, reader):
+        self.show_current()
 
+    def show_current(self):
+        if self.store is None or not self.get_mapped():
+            return
+
+        self.reset_zoom()
         for offset, picture in enumerate(self.pictures):
             page = self.page_at(self.current_position + offset)
             picture.set_paintable(None)
             self.binding_group(picture).set_source(page)
-            if page and page.paintable is None and page.url:
-                self.tasks.append(asyncio.create_task(self.load_paintable(page)))
+        self.refresh_window()
 
-    async def load_paintable(self, page):
-        try:
-            paintable = await self.suwayomi.getPaintable(page.url)
-        except Exception:
+    def wanted_pages(self):
+        start = self.current_position
+        step = self.step
+        indexes = list(range(start, start + step * (1 + PREFETCH_SPREADS)))
+        indexes += list(range(start - step, start))
+        pages = (self.page_at(index) for index in indexes)
+        return [page for page in pages if page is not None]
+
+    def refresh_window(self):
+        wanted = self.wanted_pages()
+
+        for page in self.store:
+            if page in wanted:
+                continue
+            task = self.tasks.pop(page, None)
+            if task:
+                task.cancel()
+            if page.paintable is not None:
+                page.paintable = None
+
+        for page in wanted:
+            if page.paintable is None and page.url and page not in self.tasks:
+                self.start_load(page)
+
+    def start_load(self, page):
+        self.failed_pages.discard(page)
+        task = asyncio.create_task(self.suwayomi.loadPage(page))
+        self.tasks[page] = task
+        task.add_done_callback(lambda done, page=page: self.on_load_done(page, done))
+
+    def on_load_done(self, page, task):
+        if self.tasks.get(page) is task:
+            del self.tasks[page]
+        if task.cancelled() or page.paintable is not None:
             return
-        if paintable:
-            page.paintable = paintable
+
+        self.failed_pages.add(page)
+        if self.current_position <= page.index < self.current_position + self.step:
+            self.show_toast(_("Couldn't load page {}. Press R to retry").format(page.index + 1))
+
+    def retry_failed(self):
+        for page in self.wanted_pages():
+            if page in self.failed_pages and page not in self.tasks:
+                self.start_load(page)
 
     def zoom_to(self, value, x, y):
         value = max(ZOOM_MIN, min(ZOOM_MAX, value))
@@ -240,6 +310,7 @@ class PagedReader(ReaderBase):
         if self.zoom <= ZOOM_MIN:
             self.content.set_size_request(-1, -1)
             return
+
         window = self.scrolled_window
         width = window.get_hadjustment().get_page_size()
         height = window.get_vadjustment().get_page_size()
@@ -255,10 +326,12 @@ class PagedReader(ReaderBase):
             self.apply_zoom()
 
     def on_drag_begin(self, gesture, x, y):
-        touch = gesture.get_device().get_source() == Gdk.InputSource.TOUCHSCREEN
-        if touch or self.zoom <= ZOOM_MIN:
+        source = gesture.get_device().get_source()
+        is_touch = source == Gdk.InputSource.TOUCHSCREEN
+        if is_touch or self.zoom <= ZOOM_MIN:
             gesture.set_state(Gtk.EventSequenceState.DENIED)
             return
+
         window = self.scrolled_window
         self.drag_origin = (
             window.get_hadjustment().get_value(),

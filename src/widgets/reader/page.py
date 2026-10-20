@@ -1,32 +1,20 @@
 import asyncio
 from dataclasses import dataclass
+from gettext import gettext as _
 
-from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
+from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
 from ...integrations import models
 
-from .base import adjacent_chapter
+from .base import LAST_PAGE, adjacent_chapter
 from .dialog import SettingsDialog
+from .header import ReaderHeader
+from .keys import ReaderKeys
+from .progress import ReaderProgress
+from .settings import ReaderSettings
 from .single import SinglePageReader
 from .webtoon import WebtoonReader
 from .double import DoublePageReader
-
-LAST_PAGE = 10**6
-SETTINGS_SAVE_DELAY = 500
-HEADER_HOVER_HEIGHT = 48
-HEADER_HIDE_DELAY = 1500
-
-CTRL_KEYS = (Gdk.KEY_Control_L, Gdk.KEY_Control_R)
-FULLSCREEN_KEYS = (Gdk.KEY_f, Gdk.KEY_F)
-
-ORIENTATIONS = {
-    "vertical": Gtk.Orientation.VERTICAL,
-    "horizontal": Gtk.Orientation.HORIZONTAL,
-}
-DIRECTIONS = {
-    "ltr": Gtk.TextDirection.LTR,
-    "rtl": Gtk.TextDirection.RTL,
-}
 
 
 @dataclass(frozen=True)
@@ -63,7 +51,7 @@ class ReaderPage(Adw.NavigationPage):
 
         self.store = Gio.ListStore(item_type=models.Page)
         self.load_task = None
-        self.saved_pages = {}
+        self.root_handlers = []
 
         sync = GObject.BindingFlags.SYNC_CREATE
         both_ways = sync | GObject.BindingFlags.BIDIRECTIONAL
@@ -83,8 +71,13 @@ class ReaderPage(Adw.NavigationPage):
 
         self.webtoon = self.readers["webtoon"]
         self.active_reader = self.readers[self.stack.get_visible_child_name()]
-        self.stack.connect("notify::visible-child-name", self.on_reader_switched)
 
+        self.keys = ReaderKeys(self)
+        self.auto_hide = ReaderHeader(self)
+        self.progress = ReaderProgress(self)
+        self.reader_settings = ReaderSettings(self)
+
+        self.stack.connect("notify::visible-child-name", self.on_reader_switched)
         self.connect("notify::position", self.on_position_notify)
 
         actions = {
@@ -100,9 +93,6 @@ class ReaderPage(Adw.NavigationPage):
             action_group.add_action(action)
         self.insert_action_group("reader", action_group)
 
-        self.key_root = None
-        self.key_controller = None
-
         focus_controller = Gtk.EventControllerFocus()
         focus_controller.connect("leave", self.on_focus_leave)
         self.add_controller(focus_controller)
@@ -111,87 +101,40 @@ class ReaderPage(Adw.NavigationPage):
         back_click.connect("pressed", lambda gesture, n_press, x, y: self.go_back())
         self.add_controller(back_click)
 
-        self.held_ctrl_keys = set()
-        self.pointer_in_zone = True
-        self.hide_header_id = 0
-        self.root_handlers = []
-
-        motion_controller = Gtk.EventControllerMotion(propagation_phase=Gtk.PropagationPhase.CAPTURE)
-        motion_controller.connect("enter", self.on_pointer_motion)
-        motion_controller.connect("motion", self.on_pointer_motion)
-        self.add_controller(motion_controller)
-
-        self.header_focus = Gtk.EventControllerFocus()
-        self.header_focus.connect("notify::contains-focus", self.update_header)
-        self.header.add_controller(self.header_focus)
-
         self.connect("notify::root", self.on_root_changed)
-
-        self.applying_settings = False
-        self.settings_loaded = False
-        self.save_settings_id = 0
-        self.connect("notify::direction", self.on_setting_changed)
-        self.webtoon.connect("notify::orientation", self.on_setting_changed)
-
-        self.settings_task = asyncio.create_task(self.load_settings())
         self.connect("unrealize", self.on_unrealize)
         self.connect("shown", lambda page: self.restore_focus())
 
         self.start_load(chapter_model, resume_position=self.initial_resume_position(chapter_model))
 
+    def show_toast(self, message):
+        self.activate_action("app.show_toast", GLib.Variant("s", message))
+
     def on_focus_leave(self, controller):
-        self.held_ctrl_keys.clear()
-        self.webtoon.stop_scrolling()
+        self.keys.release_keys()
+        self.webtoon.scroller.stop_keys()
 
     def on_root_changed(self, *args):
         for obj, handler_id in self.root_handlers:
             obj.disconnect(handler_id)
         self.root_handlers = []
-        self.detach_key_controller()
+        self.keys.detach()
+        self.auto_hide.detach()
 
         root = self.get_root()
         if root is None:
             return
 
-        self.attach_key_controller(root)
-
-        split_view = root.overlay_split_view
+        self.keys.attach(root)
+        self.auto_hide.attach(root)
         self.root_handlers = [
             (root, root.connect("notify::visible-dialog", self.on_dialog_changed)),
-            (split_view, split_view.connect("notify::show-sidebar", self.update_header)),
         ]
-        self.update_header()
-
-    def attach_key_controller(self, root):
-        controller = Gtk.EventControllerKey(propagation_phase=Gtk.PropagationPhase.CAPTURE)
-        controller.connect("key-pressed", self.on_key_pressed)
-        controller.connect("key-released", self.on_key_released)
-        root.add_controller(controller)
-        self.key_root = root
-        self.key_controller = controller
-
-    def detach_key_controller(self):
-        if self.key_root is not None and self.key_controller is not None:
-            self.key_root.remove_controller(self.key_controller)
-        self.key_root = None
-        self.key_controller = None
 
     def on_dialog_changed(self, *args):
-        self.update_header()
         root = self.get_root()
         if root is not None and root.get_visible_dialog() is None:
             GLib.idle_add(self.restore_focus)
-
-    def keys_active(self):
-        root = self.get_root()
-        if root is None or not self.get_mapped():
-            return False
-        if root.get_visible_dialog() is not None:
-            return False
-        focus = root.get_focus()
-        if focus is None or focus is self:
-            return True
-        return focus.is_ancestor(self) and not isinstance(focus, Gtk.Editable)
 
     def toggle_fullscreen(self):
         root = self.get_root()
@@ -201,40 +144,6 @@ class ReaderPage(Adw.NavigationPage):
             root.unfullscreen()
         else:
             root.fullscreen()
-
-    def on_pointer_motion(self, controller, x, y):
-        inside = y <= HEADER_HOVER_HEIGHT
-        if inside != self.pointer_in_zone:
-            self.pointer_in_zone = inside
-            self.update_header()
-
-    def update_header(self, *args):
-        root = self.get_root()
-        if root is None:
-            return
-
-        keep_open = (
-            self.pointer_in_zone
-            or root.get_visible_dialog() is not None
-            or root.overlay_split_view.get_show_sidebar()
-            or (self.header_focus.props.contains_focus and root.get_focus_visible())
-        )
-
-        if keep_open:
-            self.cancel_header_hide()
-            self.revealer.set_reveal_child(True)
-        elif self.revealer.get_reveal_child() and not self.hide_header_id:
-            self.hide_header_id = GLib.timeout_add(HEADER_HIDE_DELAY, self.hide_header)
-
-    def hide_header(self):
-        self.hide_header_id = 0
-        self.revealer.set_reveal_child(False)
-        return GLib.SOURCE_REMOVE
-
-    def cancel_header_hide(self):
-        if self.hide_header_id:
-            GLib.source_remove(self.hide_header_id)
-            self.hide_header_id = 0
 
     @property
     def stored_chapter_id(self):
@@ -259,7 +168,12 @@ class ReaderPage(Adw.NavigationPage):
 
     async def load_chapter(self, chapter_model, resume_position=0):
         self.chapter_model = chapter_model
-        pages = await self.suwayomi.getChapterPages(chapter_model.id)
+        try:
+            pages = await self.suwayomi.getChapterPages(chapter_model.id)
+        except Exception as error:
+            print(f"chapter failed: {chapter_model.id}: {error}")
+            self.show_toast(_("Couldn't load {}").format(chapter_model.title))
+            return
         self.store.splice(0, self.store.get_n_items(), pages)
 
         if self.chapter_model is None or self.chapter_model.id != chapter_model.id:
@@ -282,19 +196,19 @@ class ReaderPage(Adw.NavigationPage):
         self.change_chapter(direction, LAST_PAGE if direction < 0 else None)
 
     def on_unrealize(self, page):
-        self.detach_key_controller()
-        self.cancel_header_hide()
-        for task in (self.load_task, self.settings_task):
-            if task is not None:
-                task.cancel()
-        if self.save_settings_id:
-            GLib.source_remove(self.save_settings_id)
-            self.flush_settings()
+        self.keys.detach()
+        self.auto_hide.cancel_hide()
+        if self.load_task is not None:
+            self.load_task.cancel()
+        self.webtoon.scroller.stop_all()
+        self.reader_settings.finish()
+        self.progress.finish()
 
     def on_reader_switched(self, stack, pspec):
+        self.webtoon.scroller.stop_all()
         self.active_reader = self.readers[stack.get_visible_child_name()]
         self.sync_store()
-        self.on_setting_changed()
+        self.reader_settings.on_changed()
         GLib.idle_add(self.restore_focus)
 
     def restore_focus(self):
@@ -312,168 +226,12 @@ class ReaderPage(Adw.NavigationPage):
             return
         self.start_load(chapter, resume_position=self.position)
 
-    def on_key_pressed(self, controller, keyval, keycode, state):
-        if not self.keys_active():
-            return False
-
-        rtl = self.direction == Gtk.TextDirection.RTL
-
-        if keyval in CTRL_KEYS:
-            self.held_ctrl_keys.add(keyval)
-            return False
-
-        ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK) or bool(self.held_ctrl_keys)
-
-        if keyval == Gdk.KEY_Escape:
-            self.go_back()
-            return True
-
-        if keyval == Gdk.KEY_F11 or (keyval in FULLSCREEN_KEYS and not ctrl):
-            self.toggle_fullscreen()
-            return True
-
-        if ctrl and keyval in (Gdk.KEY_plus, Gdk.KEY_equal, Gdk.KEY_KP_Add):
-            self.active_reader.zoom_in()
-            return True
-        if ctrl and keyval in (Gdk.KEY_minus, Gdk.KEY_KP_Subtract):
-            self.active_reader.zoom_out()
-            return True
-        if ctrl and keyval in (Gdk.KEY_0, Gdk.KEY_KP_0):
-            self.active_reader.reset_zoom()
-            return True
-
-        if ctrl and keyval in (Gdk.KEY_Right, Gdk.KEY_Left):
-            forward = (keyval == Gdk.KEY_Right) != rtl
-            self.change_chapter(1 if forward else -1)
-            return True
-        if keyval == Gdk.KEY_period:
-            self.change_chapter(1)
-            return True
-        if keyval == Gdk.KEY_comma:
-            self.change_chapter(-1)
-            return True
-
-        if keyval == Gdk.KEY_Home:
-            self.active_reader.position = 0
-            return True
-        if keyval == Gdk.KEY_End:
-            self.active_reader.position = LAST_PAGE
-            return True
-
-        if self.active_reader is self.webtoon:
-            return self.on_webtoon_key_pressed(keyval)
-
-        if keyval in (Gdk.KEY_Down, Gdk.KEY_space, Gdk.KEY_Page_Down):
-            self.active_reader.next_page()
-            return True
-        if keyval in (Gdk.KEY_Up, Gdk.KEY_Page_Up, Gdk.KEY_BackSpace):
-            self.active_reader.previous_page()
-            return True
-
-        if keyval in (Gdk.KEY_Right, Gdk.KEY_Left):
-            forward = (keyval == Gdk.KEY_Right) != rtl
-            if forward:
-                self.active_reader.next_page()
-            else:
-                self.active_reader.previous_page()
-            return True
-
-        return False
-
-    def on_key_released(self, controller, keyval, keycode, state):
-        if keyval in CTRL_KEYS:
-            self.held_ctrl_keys.discard(keyval)
-            return
-        if not self.keys_active():
-            return
-        if self.scroll_direction(keyval) == self.webtoon.scroll_direction:
-            self.webtoon.stop_scrolling()
-
-    def scroll_direction(self, keyval):
-        horizontal = self.webtoon.orientation == Gtk.Orientation.HORIZONTAL
-        keys = (Gdk.KEY_Left, Gdk.KEY_Right) if horizontal else (Gdk.KEY_Up, Gdk.KEY_Down)
-        if keyval not in keys:
-            return 0
-        forward = keyval in (Gdk.KEY_Down, Gdk.KEY_Right)
-        if horizontal and self.direction == Gtk.TextDirection.RTL:
-            forward = not forward
-        return 1 if forward else -1
-
-    def on_webtoon_key_pressed(self, keyval):
-        if keyval == Gdk.KEY_Page_Down:
-            self.webtoon.scroll_page(1)
-        elif keyval == Gdk.KEY_Page_Up:
-            self.webtoon.scroll_page(-1)
-        elif direction := self.scroll_direction(keyval):
-            self.webtoon.start_scrolling(direction)
-        return True
-
     def on_position_notify(self, page, pspec):
-        chapter = self.chapter_model
-        if chapter is None or self.loading():
-            return
-        saved = max(self.saved_pages.get(chapter.id, 0), chapter.last_page_read)
-        if self.position + 1 > saved:
-            self.save_progress()
-
-    def save_progress(self):
-        chapter = self.chapter_model
-        total = chapter.page_count
-        if total <= 0:
-            return
-        page = self.position + 1
-        seen = self.position + self.active_reader.step
-        self.saved_pages[chapter.id] = page
-        asyncio.create_task(
-            self.suwayomi.updateChapter(
-                chapter_id=chapter.id,
-                is_read=chapter.is_read or seen >= total,
-                last_page_read=page,
-            )
-        )
+        self.progress.update()
 
     @Gtk.Template.Callback()
     def on_settings_clicked(self, *args):
         SettingsDialog(self.stack).present(self)
-
-    async def load_settings(self):
-        try:
-            settings = await self.suwayomi.getReaderSettings(self.manga_model.id)
-        except Exception:
-            settings = {}
-        self.apply_settings(settings or {})
-        self.settings_loaded = True
-
-    def apply_settings(self, settings):
-        self.applying_settings = True
-        try:
-            if settings.get("mode") in self.readers:
-                self.stack.set_visible_child_name(settings["mode"])
-            if settings.get("orientation") in ORIENTATIONS:
-                self.webtoon.orientation = ORIENTATIONS[settings["orientation"]]
-            if settings.get("direction") in DIRECTIONS:
-                self.direction = DIRECTIONS[settings["direction"]]
-        finally:
-            self.applying_settings = False
-
-    def current_settings(self):
-        return {
-            "mode": self.stack.get_visible_child_name(),
-            "orientation": self.webtoon.orientation.value_nick,
-            "direction": self.direction.value_nick,
-        }
-
-    def on_setting_changed(self, *args):
-        if self.applying_settings or not self.settings_loaded:
-            return
-        if self.save_settings_id:
-            GLib.source_remove(self.save_settings_id)
-        self.save_settings_id = GLib.timeout_add(SETTINGS_SAVE_DELAY, self.flush_settings)
-
-    def flush_settings(self):
-        self.save_settings_id = 0
-        asyncio.create_task(self.suwayomi.setReaderSettings(self.manga_model.id, self.current_settings()))
-        return GLib.SOURCE_REMOVE
 
     @Gtk.Template.Callback()
     def on_back_clicked(self, *args):

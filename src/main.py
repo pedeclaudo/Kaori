@@ -14,13 +14,17 @@ asyncio.set_event_loop_policy(GLibEventLoopPolicy())
 from gi.repository import Adw, Gio, GLib
 from gql.transport.exceptions import TransportError
 
-from .constants import NAME, set_version
+from .constants import NAME, DONATE_URL, set_version
 from .integrations import Suwayomi
 from .server import LocalServer
-from .tray import Entry, Tray
 from .widgets import KaoriWindow, build_shortcuts
 from .widgets.preferences import KaoriPreferences
 from .widgets.setup import SetupWindow
+
+if sys.platform == 'linux':
+    from .tray import Entry, Tray
+else:
+    Entry = Tray = None
 
 APPLICATION_ID = 'io.github.riyaniii.Kaori'
 
@@ -87,6 +91,7 @@ class KaoriApplication(Adw.Application):
             return
 
         hidden = (background_start
+                  and sys.platform == 'linux'
                   and mode == 'local'
                   and self.settings.get_boolean('run-in-background'))
 
@@ -105,12 +110,19 @@ class KaoriApplication(Adw.Application):
             self.background_start = True
         return -1
 
+    def failure_message(self, mode: str) -> str:
+        if mode == 'local' and self.server.log_path:
+            return f"Couldn't start the local server. See the log:\n{self.server.log_path}"
+        if mode == 'local':
+            return "Couldn't start the local server. Check the logs and try again."
+        return "Couldn't connect. Check the address and try again."
+
     async def launch_or_setup(self, mode: str, url: str, show_window: bool = True) -> None:
         try:
             if not await self.launch(mode, url, show_window):
-                self.show_setup_window(
-                    error="Couldn't reconnect. Check your setup and try again.")
+                self.show_setup_window(error=self.failure_message(mode))
         except Exception as e:
+            print(f'[kaori] failed to start: {e!r}')
             self.server.stop()
             self.show_setup_window(error=f"Failed to start: {e}")
         finally:
@@ -120,7 +132,7 @@ class KaoriApplication(Adw.Application):
         local = mode == 'local'
         if local and not self.server.running:
             self.server.start()
-        self.suwayomi.reconnect(self.server.url if local else url)
+        await self.suwayomi.reconnect(self.server.url if local else url)
 
         if not await self.wait_for_server():
             await self.suwayomi.disconnect()
@@ -139,6 +151,10 @@ class KaoriApplication(Adw.Application):
         deadline = loop.time() + READY_TIMEOUT
         while loop.time() < deadline:
             if self.server.exited:
+                print('[kaori] server exited early')
+                print('[kaori] ---- server.log (tail) ----')
+                print(self.server.log_tail())
+                print('[kaori] ----------------------------')
                 return False
             try:
                 if await self.suwayomi.getServerSettings():
@@ -146,6 +162,7 @@ class KaoriApplication(Adw.Application):
             except (TransportError, OSError, TimeoutError):
                 pass
             await asyncio.sleep(POLL_INTERVAL)
+        print(f'[kaori] server did not become ready within {READY_TIMEOUT}s')
         return False
 
     def set_background_hold(self, held: bool) -> None:
@@ -156,6 +173,8 @@ class KaoriApplication(Adw.Application):
         self.background_held = held
 
     def set_tray(self, shown: bool) -> None:
+        if Tray is None:
+            return
         if shown and not self.tray:
             self.tray = Tray(APPLICATION_ID, NAME, self.tray_entries())
         elif not shown and self.tray:
@@ -294,6 +313,7 @@ class KaoriApplication(Adw.Application):
             license='GPL-3.0-or-later',
             website='https://github.com/riyaniii/Kaori',
         )
+        dialog.add_link("Buy Me a Coffee", DONATE_URL)
         dialog.add_credit_section(
             name="CI added by",
             people=[

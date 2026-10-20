@@ -1,7 +1,5 @@
 from gi.repository import Adw
 
-from kaori.widgets.reader.page import ReaderPage
-
 from . import widgets as Widgets
 
 
@@ -44,11 +42,20 @@ def toggle_chapter_panel(app):
     stack_page = window.main_stack.get_visible_child().get_visible_page()
     reader_page = window.main_nav_view.get_visible_page()
 
-    if not (isinstance(stack_page, Widgets.manga.MangaPage) or isinstance(reader_page, ReaderPage)):
+    if not (isinstance(stack_page, Widgets.manga.MangaPage) or isinstance(reader_page, Widgets.reader.ReaderPage)):
         return
 
     split_view = window.overlay_split_view
     split_view.set_show_sidebar(not split_view.get_show_sidebar())
+
+
+def edit_categories(app, manga_id: int):
+    model = app.suwayomi.getModel(manga_id, 'Manga')
+    get_window(app).category_panel.edit_categories(model)
+
+
+def manage_categories(app):
+    get_window(app).category_panel.manage_categories()
 
 
 async def set_chapters(app, manga_id: int):
@@ -59,7 +66,7 @@ async def set_chapters(app, manga_id: int):
 async def show_reader(app, manga_id: int, chapter_id: int):
     manga_model = app.suwayomi.getModel(manga_id, 'Manga')
     chapter_model = app.suwayomi.getModel(chapter_id, 'Chapter')
-    get_window(app).main_nav_view.push(ReaderPage(manga_model, chapter_model))
+    get_window(app).main_nav_view.push(Widgets.reader.ReaderPage(manga_model, chapter_model))
 
 
 async def show_extension(app, pkg_name: str):

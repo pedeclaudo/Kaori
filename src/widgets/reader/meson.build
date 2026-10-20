@@ -6,7 +6,23 @@ reader_sources = [
   'single.py',
   'double.py',
   'webtoon.py',
-  'canvas.py'
+  'canvas.py',
+  'progress.py',
+  'keys.py',
+  'header.py',
+  'scroller.py',
+  'settings.py'
 ]
 
 install_data(reader_sources, install_dir: moduledir / 'widgets' / 'reader')
+blueprints += custom_target('reader-blueprints',
+  input: files(
+    'dialog.blp',
+    'double.blp',
+    'page.blp',
+    'single.blp',
+    'webtoon.blp',
+  ),
+  output: '.',
+  command: [blueprint_compiler, 'batch-compile', '@OUTPUT@', src_dir, '@INPUT@'],
+)

@@ -32,3 +32,4 @@ class DoublePageReader(PagedReader):
     def on_direction_changed(self, reader, pspec):
         if self.store:
             self.show_current()
+
