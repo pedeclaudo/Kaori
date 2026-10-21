@@ -1,4 +1,5 @@
 import asyncio
+import math
 from gettext import gettext as _
 
 from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
@@ -9,8 +10,11 @@ ZOOM_MIN = 1.0
 WEBTOON_ZOOM_MIN = 0.5
 ZOOM_MAX = 4.0
 ZOOM_STEP = 1.25
+ZOOM_ANIMATION_TIME = 150
+FADE_TIME = 120
 PIXELS_PER_STEP = 40
 PREFETCH_SPREADS = 2
+DRAG_THRESHOLD = 4
 LAST_PAGE = 10**6
 
 
@@ -31,6 +35,8 @@ def adjacent_chapter(manga, chapter, direction):
 class ReaderBase(Adw.Bin):
     __gtype_name__ = "KaoriReaderBase"
 
+    zoom_min = ZOOM_MIN
+
     chapter_model = GObject.Property(type=models.Chapter)
     manga_model = GObject.Property(type=models.Manga)
 
@@ -44,6 +50,8 @@ class ReaderBase(Adw.Bin):
         self.store = None
         self.pointer = (0.0, 0.0)
         self.pinch_start = 1.0
+        self.zoom_animation = None
+        self.zoom_goal = 1.0
 
         motion = Gtk.EventControllerMotion(propagation_phase=Gtk.PropagationPhase.CAPTURE)
         motion.connect("enter", self.on_pointer_moved)
@@ -84,6 +92,13 @@ class ReaderBase(Adw.Bin):
             return self.chapter_model.page_count
         return 0
 
+    @property
+    def zoom_basis(self):
+        animation = self.zoom_animation
+        if animation is not None and animation.get_state() == Adw.AnimationState.PLAYING:
+            return self.zoom_goal
+        return self.zoom
+
     def bind_store(self, store: Gio.ListStore):
         self.store = store
 
@@ -102,10 +117,26 @@ class ReaderBase(Adw.Bin):
     def zoom_to(self, value, x, y):
         raise NotImplementedError
 
+    def stop_zoom_animation(self):
+        if self.zoom_animation is not None:
+            self.zoom_animation.pause()
+            self.zoom_animation = None
+
+    def animate_zoom(self, value, x, y):
+        value = max(self.zoom_min, min(ZOOM_MAX, value))
+        self.stop_zoom_animation()
+        self.zoom_goal = value
+        target = Adw.CallbackAnimationTarget.new(lambda current: self.zoom_to(current, x, y))
+        self.zoom_animation = Adw.TimedAnimation.new(
+            self, self.zoom, value, ZOOM_ANIMATION_TIME, target
+        )
+        self.zoom_animation.set_easing(Adw.Easing.EASE_OUT_CUBIC)
+        self.zoom_animation.play()
+
     def zoom_by(self, factor):
         center_x = self.get_width() / 2
         center_y = self.get_height() / 2
-        self.zoom_to(self.zoom * factor, center_x, center_y)
+        self.animate_zoom(self.zoom_basis * factor, center_x, center_y)
 
     def zoom_in(self):
         self.zoom_by(ZOOM_STEP)
@@ -114,7 +145,7 @@ class ReaderBase(Adw.Bin):
         self.zoom_by(1 / ZOOM_STEP)
 
     def reset_zoom(self):
-        self.zoom_to(1.0, self.get_width() / 2, self.get_height() / 2)
+        self.animate_zoom(1.0, self.get_width() / 2, self.get_height() / 2)
 
     def on_pointer_moved(self, controller, x, y):
         self.pointer = (x, y)
@@ -130,11 +161,12 @@ class ReaderBase(Adw.Bin):
             steps = dy / PIXELS_PER_STEP
 
         pointer_x, pointer_y = self.pointer
-        self.zoom_to(self.zoom * ZOOM_STEP ** -steps, pointer_x, pointer_y)
+        self.animate_zoom(self.zoom_basis * ZOOM_STEP ** -steps, pointer_x, pointer_y)
         return Gdk.EVENT_STOP
 
     def on_pinch_begin(self, gesture, sequence):
         gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+        self.stop_zoom_animation()
         self.pinch_start = self.zoom
 
     def on_pinch_scale_changed(self, gesture, scale):
@@ -144,7 +176,7 @@ class ReaderBase(Adw.Bin):
 
     def on_double_tap(self, gesture, n_press, x, y):
         if n_press == 2:
-            self.zoom_to(1.0, x, y)
+            self.animate_zoom(1.0, x, y)
 
 
 class PagedReader(ReaderBase):
@@ -157,7 +189,9 @@ class PagedReader(ReaderBase):
         self.tasks = {}
         self.failed_pages = set()
         self.groups = {}
-        self.drag_origin = (0.0, 0.0)
+        self.drag_last = (0.0, 0.0)
+        self.drag_moved = False
+        self.fade = None
 
         window = self.scrolled_window
         window.get_hadjustment().connect("notify::page-size", self.on_viewport_resized)
@@ -237,16 +271,27 @@ class PagedReader(ReaderBase):
     def on_mapped(self, reader):
         self.show_current()
 
+    def fade_in(self):
+        if self.fade is not None:
+            self.fade.pause()
+        self.content.set_opacity(0.0)
+        target = Adw.CallbackAnimationTarget.new(self.content.set_opacity)
+        self.fade = Adw.TimedAnimation.new(self, 0.0, 1.0, FADE_TIME, target)
+        self.fade.set_easing(Adw.Easing.EASE_OUT_CUBIC)
+        self.fade.play()
+
     def show_current(self):
         if self.store is None or not self.get_mapped():
             return
 
-        self.reset_zoom()
+        self.stop_zoom_animation()
+        self.zoom_to(1.0, self.get_width() / 2, self.get_height() / 2)
         for offset, picture in enumerate(self.pictures):
             page = self.page_at(self.current_position + offset)
             picture.set_paintable(None)
             self.binding_group(picture).set_source(page)
         self.refresh_window()
+        self.fade_in()
 
     def wanted_pages(self):
         start = self.current_position
@@ -332,18 +377,27 @@ class PagedReader(ReaderBase):
             gesture.set_state(Gtk.EventSequenceState.DENIED)
             return
 
-        window = self.scrolled_window
-        self.drag_origin = (
-            window.get_hadjustment().get_value(),
-            window.get_vadjustment().get_value(),
-        )
-        self.set_cursor_from_name("grabbing")
+        self.drag_moved = False
+        self.drag_last = (0.0, 0.0)
 
     def on_drag_update(self, gesture, offset_x, offset_y):
-        origin_x, origin_y = self.drag_origin
+        if not self.drag_moved:
+            if math.hypot(offset_x, offset_y) < DRAG_THRESHOLD:
+                return
+            self.drag_moved = True
+            self.stop_zoom_animation()
+            self.set_cursor_from_name("grabbing")
+            self.drag_last = (offset_x, offset_y)
+            return
+
+        last_x, last_y = self.drag_last
         window = self.scrolled_window
-        window.get_hadjustment().set_value(origin_x - offset_x)
-        window.get_vadjustment().set_value(origin_y - offset_y)
+        hadjustment = window.get_hadjustment()
+        vadjustment = window.get_vadjustment()
+        hadjustment.set_value(hadjustment.get_value() - (offset_x - last_x))
+        vadjustment.set_value(vadjustment.get_value() - (offset_y - last_y))
+        self.drag_last = (offset_x, offset_y)
 
     def on_drag_end(self, gesture, offset_x, offset_y):
+        self.drag_moved = False
         self.set_cursor(None)

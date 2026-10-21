@@ -4,7 +4,6 @@ gnome = import('gnome')
 
 blueprint_compiler = find_program('blueprint-compiler', version: '>= 0.18.0')
 src_dir = meson.current_source_dir()
-blueprints = []
 
 python = import('python')
 python3 = python.find_installation('python3')
@@ -43,36 +42,59 @@ install_data(
 subdir('integrations')
 subdir('widgets')
 
-gresource_parts = files(
-  'widgets/widgets.gresource.part.xml',
-  'widgets/preferences/preferences.gresource.part.xml',
-  'widgets/home/home.gresource.part.xml',
-  'widgets/browse/browse.gresource.part.xml',
-  'widgets/source/source.gresource.part.xml',
-  'widgets/extension/extension.gresource.part.xml',
-  'widgets/library/library.gresource.part.xml',
-  'widgets/search/search.gresource.part.xml',
-  'widgets/history/history.gresource.part.xml',
-  'widgets/updates/updates.gresource.part.xml',
-  'widgets/manga/manga.gresource.part.xml',
-  'widgets/chapter/chapter.gresource.part.xml',
-  'widgets/download/download.gresource.part.xml',
-  'widgets/containers/containers.gresource.part.xml',
-  'widgets/reader/reader.gresource.part.xml',
-)
+blueprint_files = [
+  'widgets/setup.blp',
+  'widgets/shortcuts.blp',
+  'widgets/window.blp',
+  'widgets/browse/page.blp',
+  'widgets/chapter/panel.blp',
+  'widgets/chapter/row.blp',
+  'widgets/containers/manga_grid.blp',
+  'widgets/containers/row.blp',
+  'widgets/download/dialog.blp',
+  'widgets/download/page.blp',
+  'widgets/download/row.blp',
+  'widgets/extension/card.blp',
+  'widgets/extension/dialog.blp',
+  'widgets/extension/extensions.blp',
+  'widgets/history/page.blp',
+  'widgets/history/row.blp',
+  'widgets/home/page.blp',
+  'widgets/library/page.blp',
+  'widgets/library/category_panel.blp',
+  'widgets/library/category_row.blp',
+  'widgets/library/category_manager.blp',
+  'widgets/library/category_edit.blp',
+  'widgets/manga/card.blp',
+  'widgets/manga/overview.blp',
+  'widgets/manga/page.blp',
+  'widgets/preferences/extension_stores.blp',
+  'widgets/preferences/preferences.blp',
+  'widgets/reader/dialog.blp',
+  'widgets/reader/double.blp',
+  'widgets/reader/page.blp',
+  'widgets/reader/single.blp',
+  'widgets/reader/webtoon.blp',
+  'widgets/search/page.blp',
+  'widgets/source/card.blp',
+  'widgets/source/filter.blp',
+  'widgets/source/page.blp',
+  'widgets/source/sources.blp',
+  'widgets/updates/page.blp',
+  'widgets/updates/row.blp',
+]
 
-merged_gresource = custom_target('kaori-gresource-xml',
-  input: 'kaori.gresource.xml',
-  output: 'kaori.merged.gresource.xml',
-  command: [python3, files('merge_gresource.py'), '@INPUT@', '@OUTPUT@'],
-  depend_files: gresource_parts,
+blueprints = custom_target('blueprints',
+  input: files(blueprint_files),
+  output: '.',
+  command: [blueprint_compiler, 'batch-compile', '@OUTPUT@', src_dir, '@INPUT@'],
 )
 
 gnome.compile_resources('kaori',
-  merged_gresource,
+  'kaori.gresource.xml',
   gresource_bundle: true,
   install: true,
   install_dir: pkgdatadir,
-  dependencies: blueprints,
+  dependencies: [blueprints],
   source_dir: meson.current_source_dir(),
 )

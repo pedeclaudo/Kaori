@@ -1,3 +1,5 @@
+from gettext import gettext as _
+
 from gi.repository import Gtk, GObject
 
 from ...integrations import models
@@ -7,11 +9,18 @@ from ..common.dates import to_datetime
 READ_OPACITY = 0.5
 
 
+def chapter_title(name, number):
+    if name:
+        return name
+    return _("Chapter {}").format(f"{number:g}")
+
+
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/chapter/row.ui')
 class ChapterRow(Gtk.Box):
     __gtype_name__ = "KaoriChapterRow"
 
     model = GObject.Property(type=models.Chapter)
+    options = GObject.Property(type=models.ChapterOptions)
 
     def __init__(self, model=None):
         super().__init__()
@@ -27,6 +36,12 @@ class ChapterRow(Gtk.Box):
         if is_read:
             return READ_OPACITY
         return 1.0
+
+    @Gtk.Template.Callback()
+    def get_title(self, obj, name, number, mode):
+        if mode == "number":
+            return chapter_title("", number)
+        return chapter_title(name, number)
 
     @Gtk.Template.Callback()
     def get_formatted_upload_date(self, obj, upload_date):

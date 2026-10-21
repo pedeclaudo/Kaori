@@ -17,20 +17,20 @@ template $KaoriChapterRow : Gtk.Box {
       styles [
         "body"
       ]
-      label: bind template.model as <$KaoriChapter> .name;
+      label: bind $get_title(template.model as <$KaoriChapter>.name, template.model as <$KaoriChapter>.chapter_number, template.options as <$KaoriChapterOptions>.display_mode) as <string>;
       xalign: 0.0;
       ellipsize: middle;
-      tooltip-text: bind template.model as <$KaoriChapter> .name;
+      tooltip-text: bind $get_title(template.model as <$KaoriChapter>.name, template.model as <$KaoriChapter>.chapter_number, template.options as <$KaoriChapterOptions>.display_mode) as <string>;
     }
 
     Gtk.Image bookmarked {
       icon-name: "starred-symbolic";
-      visible: bind template.model as <$KaoriChapter> .is_bookmarked;
+      visible: bind template.model as <$KaoriChapter>.is_bookmarked;
     }
 
     Gtk.Image downloaded {
       icon-name: "drive-harddisk-symbolic";
-      visible: bind template.model as <$KaoriChapter> .is_downloaded;
+      visible: bind template.model as <$KaoriChapter>.is_downloaded;
     }
   }
 
@@ -42,7 +42,7 @@ template $KaoriChapterRow : Gtk.Box {
       styles [
         "body"
       ]
-      label: bind $get_formatted_upload_date(template.model as <$KaoriChapter> .upload_date) as <string>;
+      label: bind $get_formatted_upload_date(template.model as <$KaoriChapter>.upload_date) as <string>;
       xalign: 0.0;
     }
 

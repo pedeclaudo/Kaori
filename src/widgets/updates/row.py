@@ -33,19 +33,19 @@ class UpdatesRow(Gtk.Box):
         self.bindings = []
 
         self.chapter_store = Gio.ListStore(item_type=models.Chapter)
+        # ChapterRow's title binding reads options.display_mode and shows
+        # nothing while options is unset.
+        self.chapter_options = models.ChapterOptions()
 
-        factory = Gtk.SignalListItemFactory()
-        factory.connect("setup", self.on_chapter_setup)
-        factory.connect("bind", self.on_chapter_bind)
-
-        self.chapter_list = Gtk.ListView(
-            model=Gtk.NoSelection(model=self.chapter_store),
-            factory=factory,
-            single_click_activate=True,
+        # A ListBox sizes itself to its rows, which is what a short list
+        # inside a Revealer needs. A ListView outside a ScrolledWindow can
+        # end up with no height.
+        self.chapter_list = Gtk.ListBox(
+            selection_mode=Gtk.SelectionMode.NONE,
             css_classes=["inherit-color", "navigation-sidebar"],
         )
-        self.chapter_list.set_vscroll_policy(Gtk.ScrollablePolicy.NATURAL)
-        self.chapter_list.connect("activate", self.on_chapter_activate)
+        self.chapter_list.bind_model(self.chapter_store, self.create_chapter_row)
+        self.chapter_list.connect("row-activated", self.on_chapter_activated)
         self.chapters_box.append(self.chapter_list)
 
         self.connect("notify::chapter-count", self.update_chapters)
@@ -88,15 +88,16 @@ class UpdatesRow(Gtk.Box):
         if self.expanded and self.entry:
             self.fill_chapters()
 
-    def on_chapter_setup(self, factory, list_item):
-        list_item.set_activatable(True)
-        list_item.set_child(ChapterRow())
+    def create_chapter_row(self, chapter):
+        row = ChapterRow()
+        row.options = self.chapter_options
+        row.model = chapter
+        return row
 
-    def on_chapter_bind(self, factory, list_item):
-        list_item.get_child().model = list_item.get_item()
-
-    def on_chapter_activate(self, chapter_list, position):
-        self.emit("resume", self.chapter_store.get_item(position))
+    def on_chapter_activated(self, chapter_list, row):
+        chapter = self.chapter_store.get_item(row.get_index())
+        if chapter is not None:
+            self.emit("resume", chapter)
 
     @Gtk.Template.Callback()
     def subtitle_text(self, obj, name, number, is_read, page_count, last_page_read):
