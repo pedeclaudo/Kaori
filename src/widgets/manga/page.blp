@@ -144,40 +144,43 @@ template $KaoriMangaPage : Adw.NavigationPage {
           }
 
           [buttons]
-          Adw.WrapBox buttons {
-            styles [
-              "genres"
-            ]
-            line-spacing: 6;
-            child-spacing: 6;
+          Gtk.Box buttons {
+            orientation: vertical;
+            spacing: 6;
 
-            Gtk.Button read {
-              styles [
-                "suggested-action"
-              ]
-              label: bind $get_read_button_label(template.model as <$KaoriManga> .first_unread_chapter) as <string>;
-              action-name: "manga.read";
+            Gtk.Box {
+              orientation: horizontal;
+              spacing: 6;
+
+              Gtk.Button read {
+                styles [
+                  "suggested-action"
+                ]
+                label: bind $get_read_button_label(template.model as <$KaoriManga> .first_unread_chapter) as <string>;
+                action-name: "manga.read";
+              }
+
+              Gtk.Button chapters {
+                label: _("Chapters");
+                action-name: "app.toggle_chapter_panel";
+              }
             }
 
-            Gtk.Button chapters {
-              label: _("Chapters");
-              action-name: "app.toggle_chapter_panel";
-            }
+            Gtk.Box {
+              orientation: horizontal;
+              spacing: 6;
 
-            Gtk.Button library {
-              icon-name: bind $get_library_icon_name(template.model as <$KaoriManga> .in_library) as <string>;
-              tooltip-text: bind $get_library_button_tooltip(template.model as <$KaoriManga> .in_library) as <string>;
-              action-name: "manga.toggle_library";
-            }
+              Gtk.Button library {
+                icon-name: bind $get_library_icon_name(template.model as <$KaoriManga> .in_library) as <string>;
+                tooltip-text: bind $get_library_button_tooltip(template.model as <$KaoriManga> .in_library) as <string>;
+                action-name: "manga.toggle_library";
+              }
 
-            Gtk.MenuButton download {
-              icon-name: "folder-download-symbolic";
-              tooltip-text: _("Download to your device");
-              menu-model: download_menu;
-
-              styles [
-                "circular"
-              ]
+              Gtk.Button download {
+                icon-name: "folder-download-symbolic";
+                tooltip-text: _("Download");
+                clicked => $on_download_clicked();
+              }
             }
           }
 
@@ -211,44 +214,4 @@ template $KaoriMangaPage : Adw.NavigationPage {
       };
     };
   };
-}
-
-menu download_menu {
-  section {
-    item {
-      label: _("Next");
-      action: "manga.download";
-      target: "1";
-    }
-
-    item {
-      label: _("Next 5");
-      action: "manga.download";
-      target: "5";
-    }
-
-    item {
-      label: _("Next 10");
-      action: "manga.download";
-      target: "10";
-    }
-
-    item {
-      label: _("Next 25");
-      action: "manga.download";
-      target: "25";
-    }
-
-    item {
-      label: _("Unread");
-      action: "manga.download";
-      target: "-1";
-    }
-
-    item {
-      label: _("All");
-      action: "manga.download";
-      target: "0";
-    }
-  }
 }

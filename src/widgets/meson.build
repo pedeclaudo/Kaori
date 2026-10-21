@@ -24,12 +24,3 @@ subdir('search')
 subdir('library')
 subdir('common')
 
-blueprints += custom_target('widgets-blueprints',
-  input: files(
-    'setup.blp',
-    'shortcuts.blp',
-    'window.blp',
-  ),
-  output: '.',
-  command: [blueprint_compiler, 'batch-compile', '@OUTPUT@', src_dir, '@INPUT@'],
-)

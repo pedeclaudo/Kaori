@@ -5,6 +5,7 @@ CHAPTER_FIELDS = {
     'sourceOrder': 'source_order',
     'chapterNumber': 'chapter_number',
     'name': 'name',
+    'scanlator': 'scanlator',
     'pageCount': 'page_count',
     'uploadDate': 'upload_date',
     'fetchedAt': 'fetched_at',

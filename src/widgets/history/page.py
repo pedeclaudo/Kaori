@@ -11,6 +11,29 @@ from .row import HistoryRow
 REFRESH_DELAY = 2
 
 
+def apply_chapters(entry):
+    entry.update_data(
+        chapter=entry.chapters[0],
+        chapter_count=len(entry.chapters),
+        revision=entry.revision + 1,
+    )
+
+
+def add_to_entry(entry, chapter):
+    if chapter in entry.chapters:
+        return
+    entry.chapters.append(chapter)
+    apply_chapters(entry)
+
+
+def set_entry_chapters(entry, chapters):
+    chapters = list(chapters)
+    if chapters == entry.chapters:
+        return
+    entry.chapters = chapters
+    apply_chapters(entry)
+
+
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/history/page.ui')
 class HistoryPage(Adw.NavigationPage):
     __gtype_name__ = "KaoriHistoryPage"
@@ -147,7 +170,7 @@ class HistoryPage(Adw.NavigationPage):
             if existing is None:
                 merged.append(entry)
                 continue
-            existing.set_chapters(entry.chapters)
+            set_entry_chapters(existing, entry.chapters)
             entry_by_key[key] = existing
             merged.append(existing)
 
@@ -176,7 +199,7 @@ class HistoryPage(Adw.NavigationPage):
             entry = models.HistoryEntry(chapter.manga, day_number, day_title(when))
             entry_by_key[key] = entry
             created.append(entry)
-        entry.add_chapter(chapter)
+        add_to_entry(entry, chapter)
 
     def open_chapter(self, chapter):
         self.activate_action(

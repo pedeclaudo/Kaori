@@ -1,6 +1,7 @@
+import asyncio
 from gettext import gettext as _, ngettext
 
-from gi.repository import Adw, Gtk
+from gi.repository import Adw, Gio, GLib, Gtk
 
 PRESET_COUNTS = {
     "preset_next": 1,
@@ -9,6 +10,12 @@ PRESET_COUNTS = {
     "preset_next_25": 25,
     "preset_unread": None,
 }
+
+
+def chapter_title(name, number):
+    if name:
+        return name
+    return _("Chapter {}").format(f"{number:g}")
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/download/dialog.ui')
@@ -23,23 +30,53 @@ class DownloadDialog(Adw.Dialog):
 
     ready = False
 
-    def __init__(self, model, on_download):
+    def __init__(self, model):
         super().__init__()
-        self.on_download = on_download
-        self.chapters = model.sorted_chapters()
+        self.chapters = model.chapters
         self.total = len(self.chapters)
 
-        self.first_unread = model.first_unread_index() + 1
-        if self.first_unread > self.total:
-            self.first_unread = 1
+        self.first_unread = 1
+        unread = model.first_unread_chapter
+        if unread is not None:
+            for index, chapter in enumerate(self.chapters):
+                if chapter.id == unread.id:
+                    self.first_unread = index + 1
+                    break
 
         names = Gtk.StringList()
         for chapter in self.chapters:
-            names.append(chapter.title)
+            names.append(chapter_title(chapter.name, chapter.chapter_number))
         self.from_row.set_model(names)
         self.to_row.set_model(names)
 
         self.select_range(self.first_unread, self.first_unread + 4)
+
+    @staticmethod
+    def show_toast(message):
+        Gio.Application.get_default().activate_action("show_toast", GLib.Variant("s", message))
+
+    @staticmethod
+    async def start(model, parent):
+        suwayomi = Gio.Application.get_default().suwayomi
+        await suwayomi.getChapters(model.id)
+        if model.chapters.get_n_items() == 0:
+            DownloadDialog.show_toast(_("No chapters to download"))
+            return
+        DownloadDialog(model).present(parent)
+
+    async def submit(self):
+        chapters = self.get_pending()
+        if not chapters:
+            self.show_toast(_("Nothing to download"))
+            return
+
+        suwayomi = Gio.Application.get_default().suwayomi
+        for chapter in chapters:
+            await suwayomi.enqueueChapterDownload(chapter.id)
+
+        count = len(chapters)
+        message = ngettext("Downloading {} chapter", "Downloading {} chapters", count)
+        self.show_toast(message.format(count))
 
     def select_range(self, start, end):
         start = max(1, min(start, self.total))
@@ -117,6 +154,5 @@ class DownloadDialog(Adw.Dialog):
 
     @Gtk.Template.Callback()
     def on_download_clicked(self, button):
-        chapters = self.get_pending()
         self.close()
-        self.on_download(chapters)
+        asyncio.create_task(self.submit())

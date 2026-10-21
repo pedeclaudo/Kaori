@@ -63,7 +63,7 @@ template $KaoriSetupWindow : Adw.ApplicationWindow {
         styles ["compact"]
         icon-name: "folder-download-symbolic";
         title: "Add an Extension Repo";
-        description: "Kaori doesn't come with any sources. In Preferences, go to Library and add a repo under Extension Stores.";
+        description: "Kaori doesn't come with any sources. In Preferences, go to Sources and add a repo under Extension Stores.";
       }
 
       Adw.StatusPage extensions_page {
@@ -78,6 +78,62 @@ template $KaoriSetupWindow : Adw.ApplicationWindow {
           label: "Open Mihon Guide";
           halign: center;
           clicked => $on_guide();
+        };
+      }
+
+      Adw.StatusPage downloads_page {
+        hexpand: true;
+        styles ["compact"]
+        icon-name: "document-save-symbolic";
+        title: "Set Up Downloads";
+        description: "Chapters you download are saved in this folder. The default is fine unless you want them on another drive.";
+
+        child: Adw.Clamp {
+          maximum-size: 340;
+
+          child: Gtk.ListBox {
+            styles ["boxed-list"]
+            selection-mode: none;
+
+            Adw.ActionRow downloads_folder_row {
+              styles ["property"]
+              title: "Download Location";
+              activatable: true;
+              activated => $on_path_activated();
+
+              [suffix]
+              Gtk.Button {
+                styles ["flat"]
+                valign: center;
+                icon-name: "edit-clear-symbolic";
+                tooltip-text: "Use Default";
+                clicked => $on_path_cleared();
+
+                accessibility {
+                  label: "Use default download location";
+                }
+              }
+
+              [suffix]
+              Gtk.Button {
+                styles ["flat"]
+                valign: center;
+                icon-name: "folder-open-symbolic";
+                tooltip-text: "Open Folder";
+                clicked => $on_open_folder();
+
+                accessibility {
+                  label: "Open download folder";
+                }
+              }
+            }
+
+            Adw.SwitchRow cbz_row {
+              title: "Save as CBZ Archive";
+              subtitle: "Compress each chapter into one CBZ file";
+              notify::active => $on_switch_toggled();
+            }
+          };
         };
       }
 
@@ -99,7 +155,7 @@ template $KaoriSetupWindow : Adw.ApplicationWindow {
               styles ["boxed-list"]
               selection-mode: none;
 
-              Adw.ActionRow folder_row {
+              Adw.ActionRow local_folder_row {
                 styles ["property"]
                 title: "Local Source Folder";
                 activatable: true;
@@ -112,6 +168,10 @@ template $KaoriSetupWindow : Adw.ApplicationWindow {
                   icon-name: "edit-clear-symbolic";
                   tooltip-text: "Use Default";
                   clicked => $on_path_cleared();
+
+                  accessibility {
+                    label: "Use default local source folder";
+                  }
                 }
 
                 [suffix]
@@ -121,6 +181,10 @@ template $KaoriSetupWindow : Adw.ApplicationWindow {
                   icon-name: "folder-open-symbolic";
                   tooltip-text: "Open Folder";
                   clicked => $on_open_folder();
+
+                  accessibility {
+                    label: "Open local source folder";
+                  }
                 }
               }
             };
@@ -135,12 +199,105 @@ template $KaoriSetupWindow : Adw.ApplicationWindow {
         };
       }
 
+      Adw.StatusPage updates_page {
+        hexpand: true;
+        styles ["compact"]
+        icon-name: "view-refresh-symbolic";
+        title: "Keep Your Library Updated";
+        description: "Choose how often Kaori checks your library for new chapters. Set it to 0 to turn updates off. The minimum is 6 hours.";
+
+        child: Adw.Clamp {
+          maximum-size: 340;
+
+          child: Gtk.ListBox {
+            styles ["boxed-list"]
+            selection-mode: none;
+
+            Adw.SpinRow update_interval_row {
+              title: "Update Interval";
+              subtitle: "Hours between updates";
+              adjustment: Gtk.Adjustment {
+                lower: 0;
+                upper: 720;
+                value: 12;
+                step-increment: 1;
+                page-increment: 6;
+              };
+              notify::value => $on_spin_changed();
+            }
+          };
+        };
+      }
+
+      Adw.StatusPage backups_page {
+        hexpand: true;
+        styles ["compact"]
+        icon-name: "drive-harddisk-symbolic";
+        title: "Back Up Your Library";
+        description: "The server saves a copy of your library on a schedule. Set the interval to 0 to turn backups off.";
+
+        child: Adw.Clamp {
+          maximum-size: 340;
+
+          child: Gtk.ListBox {
+            styles ["boxed-list"]
+            selection-mode: none;
+
+            Adw.ActionRow backups_folder_row {
+              styles ["property"]
+              title: "Backup Location";
+              activatable: true;
+              activated => $on_path_activated();
+
+              [suffix]
+              Gtk.Button {
+                styles ["flat"]
+                valign: center;
+                icon-name: "edit-clear-symbolic";
+                tooltip-text: "Use Default";
+                clicked => $on_path_cleared();
+
+                accessibility {
+                  label: "Use default backup location";
+                }
+              }
+
+              [suffix]
+              Gtk.Button {
+                styles ["flat"]
+                valign: center;
+                icon-name: "folder-open-symbolic";
+                tooltip-text: "Open Folder";
+                clicked => $on_open_folder();
+
+                accessibility {
+                  label: "Open backup folder";
+                }
+              }
+            }
+
+            Adw.SpinRow backup_interval_row {
+              title: "Backup Interval";
+              subtitle: "Days between backups";
+              adjustment: Gtk.Adjustment {
+                lower: 0;
+                upper: 365;
+                value: 1;
+                step-increment: 1;
+                page-increment: 7;
+              };
+              notify::value => $on_spin_changed();
+            }
+          };
+        };
+      }
+
       Adw.StatusPage done_page {
         hexpand: true;
         styles ["compact"]
         icon-name: "circle-check-cross-symbolic";
         title: "You're All Set";
-        description: "Enjoy reading with Kaori. If you like it, consider supporting development.";
+        description: "You can change any of this later in Preferences. Enjoy reading with Kaori, and if you like it, consider supporting development.";
 
         child: Gtk.Button {
           styles ["pill"]

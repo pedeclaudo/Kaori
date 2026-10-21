@@ -4,6 +4,20 @@ from gettext import gettext as _
 from gi.repository import Gdk, Gio, GLib, Gtk
 
 
+def chapter_title(name, number):
+    if name:
+        return name
+    return _("Chapter {}").format(f"{number:g}")
+
+
+def chapters_before(manga, chapter):
+    return [item for item in manga.chapters if item.source_order < chapter.source_order]
+
+
+def chapters_after(manga, chapter):
+    return [item for item in manga.chapters if item.source_order > chapter.source_order]
+
+
 class ChapterMenu:
     def __init__(self, widget, get_chapter):
         self.widget = widget
@@ -17,7 +31,8 @@ class ChapterMenu:
             ("remove_bookmark", _("Remove Bookmark"), lambda *args: self.change(is_bookmarked=False)),
             ("mark_read", _("Mark as Read"), lambda *args: self.change(is_read=True)),
             ("mark_unread", _("Mark as Unread"), lambda *args: self.change(is_read=False)),
-            ("download", _("Download"), lambda *args: asyncio.create_task(self.download())),
+            ("mark_before", _("Mark Earlier Chapters as Read"), lambda *args: asyncio.create_task(self.mark_before())),
+            ("mark_after", _("Mark Later Chapters as Read"), lambda *args: asyncio.create_task(self.mark_after())),
             ("delete_download", _("Delete Download"), lambda *args: asyncio.create_task(self.delete_download())),
         )
 
@@ -34,6 +49,7 @@ class ChapterMenu:
         self.popover = Gtk.PopoverMenu.new_from_model(menu)
         self.popover.set_has_arrow(False)
         self.popover.set_parent(widget)
+        self.popover.set_halign(Gtk.Align.START)
 
         right_click = Gtk.GestureClick(button=3)
         right_click.connect("pressed", self.on_right_click)
@@ -52,6 +68,20 @@ class ChapterMenu:
     def show_toast(self, message):
         self.widget.activate_action("app.show_toast", GLib.Variant("s", message))
 
+    def unread_before(self):
+        chapter = self.get_chapter()
+        manga = self.suwayomi.getModel(chapter.manga_id, 'Manga')
+        if manga is None:
+            return []
+        return [item for item in chapters_before(manga, chapter) if not item.is_read]
+
+    def unread_after(self):
+        chapter = self.get_chapter()
+        manga = self.suwayomi.getModel(chapter.manga_id, 'Manga')
+        if manga is None:
+            return []
+        return [item for item in chapters_after(manga, chapter) if not item.is_read]
+
     def open_menu(self, x, y):
         chapter = self.get_chapter()
         if chapter is None:
@@ -61,7 +91,8 @@ class ChapterMenu:
         self.set_action_enabled("remove_bookmark", chapter.is_bookmarked)
         self.set_action_enabled("mark_read", not chapter.is_read)
         self.set_action_enabled("mark_unread", chapter.is_read)
-        self.set_action_enabled("download", not chapter.is_downloaded)
+        self.set_action_enabled("mark_before", len(self.unread_before()) > 0)
+        self.set_action_enabled("mark_after", len(self.unread_after()) > 0)
         self.set_action_enabled("delete_download", chapter.is_downloaded)
 
         area = Gdk.Rectangle()
@@ -78,12 +109,21 @@ class ChapterMenu:
     def change(self, **changes):
         asyncio.create_task(self.suwayomi.updateChapter(self.get_chapter().id, **changes))
 
-    async def download(self):
-        chapter = self.get_chapter()
-        await self.suwayomi.enqueueChapterDownload(chapter.id)
-        self.show_toast(_("Downloading {}").format(chapter.title))
+    async def mark_chapters_read(self, chapters):
+        jobs = []
+        for chapter in chapters:
+            jobs.append(self.suwayomi.updateChapter(chapter.id, is_read=True))
+        await asyncio.gather(*jobs, return_exceptions=True)
+        self.show_toast(_("Marked {} chapters as read").format(len(chapters)))
+
+    async def mark_before(self):
+        await self.mark_chapters_read(self.unread_before())
+
+    async def mark_after(self):
+        await self.mark_chapters_read(self.unread_after())
 
     async def delete_download(self):
         chapter = self.get_chapter()
         await self.suwayomi.deleteDownloadedChapter(chapter.id)
-        self.show_toast(_("Deleted download of {}").format(chapter.title))
+        title = chapter_title(chapter.name, chapter.chapter_number)
+        self.show_toast(_("Deleted download of {}").format(title))

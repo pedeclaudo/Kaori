@@ -7,6 +7,22 @@ from ..constants import DONATE_URL, GUIDE_URL
 
 LOCAL_SOURCE_URL = "https://github.com/Suwayomi/Suwayomi-Server/wiki/Local-Source"
 
+FOLDERS = {
+    "downloads_folder_row": ("downloadsPath", "downloads"),
+    "local_folder_row": ("localSourcePath", "local"),
+    "backups_folder_row": ("backupPath", "backups"),
+}
+
+SETTINGS = {
+    "cbz_row": "downloadAsCbz",
+    "update_interval_row": "globalUpdateInterval",
+    "backup_interval_row": "backupInterval",
+}
+
+
+def row_key(row) -> str:
+    return Gtk.Buildable.get_buildable_id(row)
+
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/setup.ui')
 class SetupWindow(Adw.ApplicationWindow):
@@ -19,8 +35,13 @@ class SetupWindow(Adw.ApplicationWindow):
     remote_row = Gtk.Template.Child()
     repo_page = Gtk.Template.Child()
     extensions_page = Gtk.Template.Child()
+    downloads_page = Gtk.Template.Child()
+    downloads_folder_row = Gtk.Template.Child()
     local_page = Gtk.Template.Child()
-    folder_row = Gtk.Template.Child()
+    local_folder_row = Gtk.Template.Child()
+    updates_page = Gtk.Template.Child()
+    backups_page = Gtk.Template.Child()
+    backups_folder_row = Gtk.Template.Child()
     done_page = Gtk.Template.Child()
     back_button = Gtk.Template.Child()
     next_button = Gtk.Template.Child()
@@ -33,14 +54,26 @@ class SetupWindow(Adw.ApplicationWindow):
         self.guided = guided
         self.mode = "local"
         self.url = ""
-        self.local_folder = None
-        self.local_path = ""
         self.current = 0
+        self.changes = {}
+        self.local_pages = (
+            self.downloads_page,
+            self.local_page,
+            self.updates_page,
+            self.backups_page,
+        )
+        self.folder_rows = (
+            self.downloads_folder_row,
+            self.local_folder_row,
+            self.backups_folder_row,
+        )
 
         if error:
             self.status_page.set_description(error)
 
-        self.carousel.remove(self.local_page)
+        for page in self.local_pages:
+            self.carousel.remove(page)
+
         if guided:
             self.toolbar.set_reveal_bottom_bars(True)
         else:
@@ -60,18 +93,32 @@ class SetupWindow(Adw.ApplicationWindow):
     def open_uri(self, url: str):
         Gtk.UriLauncher(uri=url).launch(self, None, None)
 
-    def set_local_step(self, enabled: bool):
-        present = self.local_page.get_parent() is not None
+    def set_local_steps(self, enabled: bool):
+        present = self.downloads_page.get_parent() is not None
         if enabled and not present:
-            self.update_folder_row()
-            self.carousel.insert(self.local_page, self.carousel.get_n_pages() - 1)
+            for row in self.folder_rows:
+                self.update_folder_row(row)
+            for page in self.local_pages:
+                self.carousel.insert(page, self.carousel.get_n_pages() - 1)
         elif not enabled and present:
-            self.carousel.remove(self.local_page)
+            for page in self.local_pages:
+                self.carousel.remove(page)
         self.update_nav()
 
-    def update_folder_row(self):
-        self.local_folder = self.local_path or self.app.server.default_folder('local')
-        self.folder_row.set_subtitle(self.local_folder)
+    def folder_for(self, row) -> str:
+        setting, folder_name = FOLDERS[row_key(row)]
+        return self.changes.get(setting) or self.app.server.default_folder(folder_name)
+
+    def update_folder_row(self, row):
+        row.set_subtitle(self.folder_for(row))
+
+    def set_folder_path(self, row, path: str):
+        setting, folder_name = FOLDERS[row_key(row)]
+        if path:
+            self.changes[setting] = path
+        else:
+            self.changes.pop(setting, None)
+        self.update_folder_row(row)
 
     def choose(self, mode: str, url: str):
         if not self.guided:
@@ -79,7 +126,7 @@ class SetupWindow(Adw.ApplicationWindow):
             return
         self.mode = mode
         self.url = url
-        self.set_local_step(mode == "local")
+        self.set_local_steps(mode == "local")
         self.go_to(1)
 
     @Gtk.Template.Callback()
@@ -112,31 +159,40 @@ class SetupWindow(Adw.ApplicationWindow):
         self.open_uri(DONATE_URL)
 
     @Gtk.Template.Callback()
+    def on_switch_toggled(self, row, pspec):
+        self.changes[SETTINGS[row_key(row)]] = row.get_active()
+
+    @Gtk.Template.Callback()
+    def on_spin_changed(self, row, pspec):
+        self.changes[SETTINGS[row_key(row)]] = int(row.get_value())
+
+    @Gtk.Template.Callback()
     def on_path_activated(self, row):
         Gtk.FileDialog(title=row.get_title()).select_folder(
-            self, None, self.on_path_selected
+            self, None, self.on_path_selected, row
         )
 
-    def on_path_selected(self, dialog, result):
+    def on_path_selected(self, dialog, result, row):
         try:
             folder = dialog.select_folder_finish(result)
         except GLib.Error:
             return
-        self.local_path = folder.get_path()
-        self.update_folder_row()
+        self.set_folder_path(row, folder.get_path())
 
     @Gtk.Template.Callback()
     def on_path_cleared(self, button):
-        self.local_path = ""
-        self.update_folder_row()
+        row = button.get_ancestor(Adw.ActionRow)
+        self.set_folder_path(row, "")
 
     @Gtk.Template.Callback()
     def on_open_folder(self, button):
+        row = button.get_ancestor(Adw.ActionRow)
+        path = self.folder_for(row)
         try:
-            os.makedirs(self.local_folder, exist_ok=True)
+            os.makedirs(path, exist_ok=True)
         except OSError:
             return
-        Gtk.FileLauncher(file=Gio.File.new_for_path(self.local_folder)).launch(self, None, None)
+        Gtk.FileLauncher(file=Gio.File.new_for_path(path)).launch(self, None, None)
 
     @Gtk.Template.Callback()
     def on_local_activated(self, row):
@@ -177,10 +233,10 @@ class SetupWindow(Adw.ApplicationWindow):
         dialog = Adw.Dialog(title="Remote Server", content_width=360)
         dialog.set_child(toolbar_view)
 
-        def update_sensitivity(*_):
+        def update_sensitivity(*args):
             connect_button.set_sensitive(bool(url_row.get_text().strip()))
 
-        def do_connect(*_):
+        def do_connect(*args):
             url = url_row.get_text().strip().rstrip('/')
             if not url:
                 return
@@ -200,19 +256,21 @@ class SetupWindow(Adw.ApplicationWindow):
         self.set_visible(False)
         asyncio.create_task(self.try_connect(mode, url))
 
-    async def save_local_path(self):
+    async def save_settings(self):
+        if not self.changes:
+            return
         try:
-            await self.app.suwayomi.setServerSettings(localSourcePath=self.local_path)
+            await self.app.suwayomi.setServerSettings(**self.changes)
         except Exception as e:
-            print(f'[kaori] saving local source path failed: {e!r}')
+            print(f'[kaori] saving setup settings failed: {e!r}')
 
     async def try_connect(self, mode: str, url: str):
         try:
             if await self.app.launch(mode, url):
                 if self.guided:
                     self.app.settings.set_boolean('welcome-shown', True)
-                    if mode == "local" and self.local_path:
-                        await self.save_local_path()
+                    if mode == "local":
+                        await self.save_settings()
                 self.close()
                 return
             error = self.app.failure_message(mode)
