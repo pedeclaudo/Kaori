@@ -13,8 +13,6 @@ class BrowsePage(Adw.NavigationPage):
 
     sources_page = Gtk.Template.Child()
     extensions_page = Gtk.Template.Child()
-    search_bar = Gtk.Template.Child()
-    search_entry = Gtk.Template.Child()
 
     def __init__(self):
         super().__init__()
@@ -31,15 +29,6 @@ class BrowsePage(Adw.NavigationPage):
         text = entry.get_text().strip()
         self.sources_page.search_text = text
         self.extensions_page.search_text = text
-
-    @Gtk.Template.Callback()
-    def on_search_started(self, entry):
-        self.search_bar.set_search_mode(True)
-
-    @Gtk.Template.Callback()
-    def on_search_mode_changed(self, search_bar, pspec):
-        if not search_bar.get_search_mode():
-            self.search_entry.set_text("")
 
     @Gtk.Template.Callback()
     def on_languages_clicked(self, *_):

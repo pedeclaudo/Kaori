@@ -9,10 +9,8 @@ from .base import WEBTOON_ZOOM_MIN, ZOOM_MAX
 
 PRELOAD = 1.0
 LOAD_MARGIN = 2.0
-UNLOAD_MARGIN = 3.0
 IMAGE_PREFETCH = 4
 POOL_MAX = 8
-SNAP_EPSILON = 1e-3
 
 
 class Panel(Gtk.Stack):
@@ -26,6 +24,7 @@ class Panel(Gtk.Stack):
         super().__init__()
         self.page = None
         self.failed_state = False
+        self.ratio_handler = 0
         self.bindings = GObject.BindingGroup()
         self.picture = Gtk.Picture(content_fit=Gtk.ContentFit.FILL)
         self.banner_title = Gtk.Label(
@@ -105,36 +104,6 @@ class Panel(Gtk.Stack):
         self.paintable = None
 
 
-class PanelLayer(Gtk.Widget):
-    """Holds every realized panel in one local coordinate space.
-
-    The canvas moves and scales this single widget when scrolling or zooming,
-    so panels are only re-allocated when the layout or the realized set changes.
-    GTK maps pointer picks through the layer's transform, so child widgets
-    (the retry button) stay clickable at any scroll offset or zoom.
-    """
-
-    __gtype_name__ = "KaoriPanelLayer"
-
-    def __init__(self):
-        super().__init__()
-        self.placements = {}
-
-    def do_measure(self, orientation, for_size):
-        return 0, 0, -1, -1
-
-    def do_size_allocate(self, width, height, baseline):
-        for panel, (x, y, panel_width, panel_height) in self.placements.items():
-            transform = Gsk.Transform.new().translate(Graphene.Point().init(x, y))
-            panel.allocate(panel_width, panel_height, -1, transform)
-
-    def do_dispose(self):
-        self.placements = {}
-        while child := self.get_first_child():
-            child.unparent()
-        super().do_dispose()
-
-
 class Canvas(Gtk.Widget, Gtk.Scrollable):
     __gtype_name__ = "KaoriCanvas"
 
@@ -152,56 +121,36 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
         super().__init__(**kwargs)
         self.suwayomi = Gio.Application.get_default().suwayomi
         self.store = None
-        self.store_handler = 0
 
         self.pages = []
         self.indices = {}
         self.starts = []
         self.sizes = []
-        self.layout_ratios = {}
         self.extent = 0.0
         self.cross = 0
         self.layout_dirty = False
-        self.refresh_anchor = False
         self.saved_anchor = None
-        self.window = None
 
         self.zoom = 1.0
 
         self.realized = {}
         self.tasks = {}
         self.failed_pages = set()
-        self.ratio_handlers = {}
         self.pool = []
         self.current_page = None
         self.pending_index = None
-
-        self.layer = PanelLayer()
-        self.layer.set_parent(self)
-        self.placements_dirty = False
-        self.layer_origin = 0.0
-        self.layer_end = 0.0
-        self.layer_main = 0
 
         self.connect("notify::orientation", self.on_orientation_changed)
         self.connect("notify::hadjustment", self.on_adjustment_replaced)
         self.connect("notify::vadjustment", self.on_adjustment_replaced)
 
     def do_dispose(self):
-        if self.store is not None and self.store_handler:
-            self.store.disconnect(self.store_handler)
-            self.store_handler = 0
-        for page, handler in self.ratio_handlers.items():
-            page.disconnect(handler)
-        self.ratio_handlers.clear()
+        for page, panel in self.realized.items():
+            page.disconnect(panel.ratio_handler)
         for task in self.tasks.values():
             task.cancel()
-        self.layer.placements = {}
-        for panel in [*self.realized.values(), *self.pool]:
-            panel.unparent()
-        self.realized.clear()
-        self.pool.clear()
-        self.layer.unparent()
+        while child := self.get_first_child():
+            child.unparent()
         super().do_dispose()
 
     @GObject.Property(type=Gtk.TextDirection, default=Gtk.TextDirection.LTR)
@@ -214,7 +163,6 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
         self.set_direction(value)
         if self.hadjustment:
             self.set_scroll_value(self.hadjustment, left)
-        self.placements_dirty = True
         self.queue_allocate()
 
     @property
@@ -250,22 +198,12 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
 
     def bind_store(self, store: Gio.ListStore):
         self.store = store
-        self.store_handler = store.connect("items-changed", self.on_items_changed)
+        store.connect("items-changed", self.on_items_changed)
 
     def on_items_changed(self, store, position, removed, added):
         self.invalidate_layout()
-        self.window = None
         self.pages = list(store)
         self.indices = {page: index for index, page in enumerate(self.pages)}
-
-        # Watch ratios for every page, not only realized ones: pages in the
-        # load band beyond the realized band still resize when they decode.
-        for page in self.pages:
-            if page not in self.ratio_handlers:
-                self.ratio_handlers[page] = page.connect("notify::ratio", self.on_ratio_changed)
-        for page in [page for page in self.ratio_handlers if page not in self.indices]:
-            page.disconnect(self.ratio_handlers.pop(page))
-
         for page in list(self.realized):
             if page not in self.indices:
                 self.unrealize_panel(page)
@@ -274,18 +212,12 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
                 self.unload(page)
 
     def on_ratio_changed(self, page, pspec):
-        if self.layout_ratios.get(page) == page.ratio:
-            return
-        if not self.layout_dirty:
-            self.layout_dirty = True
-            self.refresh_anchor = True
-        self.queue_allocate()
+        self.invalidate_layout()
 
     def invalidate_layout(self):
-        if not self.layout_dirty or self.refresh_anchor:
+        if not self.layout_dirty:
             self.saved_anchor = self.find_anchor()
-            self.refresh_anchor = False
-        self.layout_dirty = True
+            self.layout_dirty = True
         self.queue_allocate()
 
     def index_at(self, position):
@@ -336,14 +268,10 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
     def relayout(self):
         self.starts = []
         self.sizes = []
-        self.layout_ratios = {}
-        self.window = None
-        self.placements_dirty = True
         position = 0.0
         for page in self.pages:
             ratio = page.ratio
             size = self.cross / ratio if self.vertical else self.cross * ratio
-            self.layout_ratios[page] = ratio
             self.starts.append(position)
             self.sizes.append(size)
             position += size
@@ -374,32 +302,23 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
             self.emit("page-changed", index)
 
     def update_realized(self):
-        window = (
-            self.visible_range(PRELOAD),
-            self.visible_range(LOAD_MARGIN),
-            self.visible_range(UNLOAD_MARGIN),
-        )
-        if window == self.window:
-            return
-        self.window = window
-
-        (first, last), (load_first, load_last), (keep_first, keep_last) = window
-        visible = self.pages[first:last + 1]
-        wanted = set(visible)
+        first, last = self.visible_range(PRELOAD)
+        wanted = self.pages[first:last + 1]
 
         for page in list(self.realized):
             if page not in wanted:
                 self.unrealize_panel(page)
-        for page in visible:
+        for page in wanted:
             if page not in self.realized:
                 self.realize_panel(page)
 
-        keep = set(self.pages[keep_first:keep_last + 1])
+        load_first, load_last = self.visible_range(LOAD_MARGIN)
+        to_load = self.pages[load_first:load_last + 1]
 
         for page in list(self.tasks):
-            if page not in keep:
+            if page not in to_load:
                 self.unload(page)
-        for page in self.pages[load_first:load_last + 1]:
+        for page in to_load:
             if page.url and page not in self.tasks:
                 self.start_load(page)
 
@@ -413,23 +332,22 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
         else:
             panel = Panel()
             panel.connect("retry-requested", self.on_retry_requested)
-            panel.set_parent(self.layer)
+            panel.set_parent(self)
 
         panel.show_page(page)
         panel.failed = page in self.failed_pages
+        panel.ratio_handler = page.connect("notify::ratio", self.on_ratio_changed)
         self.realized[page] = panel
-        self.placements_dirty = True
 
     def unrealize_panel(self, page):
         panel = self.realized.pop(page)
-        self.layer.placements.pop(panel, None)
+        page.disconnect(panel.ratio_handler)
         panel.clear()
         panel.set_visible(False)
         if len(self.pool) < POOL_MAX:
             self.pool.append(panel)
         else:
             panel.unparent()
-        self.placements_dirty = True
 
     def start_load(self, page):
         old_task = self.tasks.pop(page, None)
@@ -469,73 +387,28 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
         for page in list(self.failed_pages):
             self.start_load(page)
 
-    def update_placements(self):
-        """Lay realized panels out inside the layer. Runs only when the layout
-        or the realized set changed, never on a plain scroll tick."""
-        self.placements_dirty = False
-        slots = {page: self.indices[page] for page in self.realized}
-        if not slots:
-            self.layer.placements = {}
-            return
-
-        origin = min(self.starts[index] for index in slots.values())
-        end = max(self.starts[index] + self.sizes[index] for index in slots.values())
-        cross = math.ceil(self.cross)
-
-        placements = {}
-        main = 1
-        for page, panel in self.realized.items():
-            index = slots[page]
-            start, size = self.starts[index], self.sizes[index]
-            local = end - start - size if self.mirrored else start - origin
-            # Snap outward to whole pixels so neighbours never leave a gap.
-            low = math.floor(local + SNAP_EPSILON)
-            high = max(low + 1, math.ceil(local + size - SNAP_EPSILON))
-            main = max(main, high)
-            if self.vertical:
-                placements[panel] = (0, low, cross, high - low)
-            else:
-                placements[panel] = (low, 0, high - low, cross)
-
-        self.layer_origin = origin
-        self.layer_end = end
-        self.layer_main = main
-        self.layer.placements = placements
-        self.layer.queue_allocate()
-
     def place_panels(self, width, height):
-        if self.placements_dirty:
-            self.update_placements()
-        if not self.realized:
-            return
+        left = self.scroll_value(self.hadjustment) / self.zoom
+        top = self.scroll_value(self.vadjustment) / self.zoom
 
-        zoom = self.zoom
-        scroll_x = self.scroll_value(self.hadjustment)
-        scroll_y = self.scroll_value(self.vadjustment)
-        offset_x = self.centering_offset(self.content_width, zoom, width)
-        offset_y = self.centering_offset(self.content_height, zoom, height)
+        offset_x = self.centering_offset(self.content_width, self.zoom, width)
+        offset_y = self.centering_offset(self.content_height, self.zoom, height)
 
-        if self.vertical:
-            x = zoom * offset_x - scroll_x
-            y = zoom * (offset_y + self.layer_origin) - scroll_y
-            layer_width, layer_height = math.ceil(self.cross), self.layer_main
-        else:
-            if self.mirrored:
-                x = width - zoom * offset_x + scroll_x - zoom * self.layer_end
+        for page, panel in self.realized.items():
+            index = self.indices[page]
+            x = offset_x - left
+            y = offset_y - top
+            if self.vertical:
+                y += self.starts[index]
+                panel_width, panel_height = self.cross, self.sizes[index]
             else:
-                x = zoom * (offset_x + self.layer_origin) - scroll_x
-            y = zoom * offset_y - scroll_y
-            layer_width, layer_height = self.layer_main, math.ceil(self.cross)
+                x += self.starts[index]
+                panel_width, panel_height = self.sizes[index], self.cross
+            if self.mirrored:
+                x = width / self.zoom - x - panel_width
 
-        # Land on whole device pixels so textures aren't filtered mid-scroll.
-        device_scale = self.get_scale_factor()
-        x = round(x * device_scale) / device_scale
-        y = round(y * device_scale) / device_scale
-
-        transform = Gsk.Transform.new().translate(Graphene.Point().init(x, y))
-        if zoom != 1.0:
-            transform = transform.scale(zoom, zoom)
-        self.layer.allocate(layer_width, layer_height, -1, transform)
+            transform = Gsk.Transform.new().translate(Graphene.Point().init(x, y))
+            panel.allocate(math.ceil(panel_width), math.ceil(panel_height), -1, transform)
 
     def centering_offset(self, content_size, zoom, viewport_size):
         return max(0.0, (viewport_size / zoom - content_size) / 2)
@@ -615,6 +488,11 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
     def do_measure(self, orientation, for_size):
         return 0, 0, -1, -1
 
+    def do_snapshot(self, snapshot):
+        snapshot.scale(self.zoom, self.zoom)
+        for panel in self.realized.values():
+            self.snapshot_child(panel, snapshot)
+
     def do_size_allocate(self, width, height, baseline):
         cross = width if self.vertical else height
         if cross != self.cross:
@@ -623,12 +501,10 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
             self.relayout()
             self.restore_scroll_fractions(fractions)
         elif self.layout_dirty:
-            anchor = self.find_anchor() if self.refresh_anchor else self.saved_anchor
             self.relayout()
             self.configure_adjustments()
-            self.restore_anchor(anchor)
+            self.restore_anchor(self.saved_anchor)
         self.layout_dirty = False
-        self.refresh_anchor = False
         self.saved_anchor = None
         self.configure_adjustments()
 
@@ -638,4 +514,3 @@ class Canvas(Gtk.Widget, Gtk.Scrollable):
         self.update_current_page()
         self.update_realized()
         self.place_panels(width, height)
-        self.queue_draw()

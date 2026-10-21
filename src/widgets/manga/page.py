@@ -5,7 +5,6 @@ from gi.repository import Gtk, Adw, GObject, Gio, GLib
 
 from ...integrations import models
 
-from ..download.dialog import DownloadDialog
 
 def markdown_to_pango(md: str) -> str:
     if md is None:
@@ -96,9 +95,10 @@ class MangaPage(Adw.NavigationPage):
         self.add_manga_action("read", self.on_read)
         self.add_manga_action("toggle_library", self.on_toggle_library)
         self.add_manga_action("refresh", self.on_refresh)
+        self.add_manga_action("download", self.on_download, GLib.VariantType.new("s"))
 
-    def add_manga_action(self, name, callback):
-        action = Gio.SimpleAction.new(name, None)
+    def add_manga_action(self, name, callback, param_type=None):
+        action = Gio.SimpleAction.new(name, param_type)
         action.connect("activate", callback)
         self.actions.add_action(action)
 
@@ -156,6 +156,33 @@ class MangaPage(Adw.NavigationPage):
     def on_toggle_library(self, *args):
         asyncio.create_task(self.toggle_library())
 
+    def on_download(self, action, parameter):
+        if self.model.chapters.get_n_items() == 0:
+            self.show_toast(_("No chapters to download"))
+            return
+        chapters = self.chapters_to_download(int(parameter.get_string()))
+        asyncio.create_task(self.download_chapters(chapters))
+
+    def chapters_to_download(self, amount):
+        chapters = self.model.sorted_chapters()
+
+        if amount == 0:
+            candidates = chapters
+        elif amount < 0:
+            candidates = []
+            for chapter in chapters:
+                if not chapter.is_read:
+                    candidates.append(chapter)
+        else:
+            start = self.model.first_unread_index()
+            candidates = chapters[start:start + amount]
+
+        pending = []
+        for chapter in candidates:
+            if not chapter.is_downloaded:
+                pending.append(chapter)
+        return pending
+
     async def toggle_library(self):
         model = self.model
         was_in_library = model.in_library
@@ -166,6 +193,17 @@ class MangaPage(Adw.NavigationPage):
             self.show_toast(_("{} removed from library").format(model.title))
         else:
             self.show_toast(_("{} added to library").format(model.title))
+
+    async def download_chapters(self, chapters):
+        if not chapters:
+            self.show_toast(_("Nothing to download"))
+            return
+
+        for chapter in chapters:
+            await self.suwayomi.enqueueChapterDownload(chapter.id)
+
+        count = len(chapters)
+        self.show_toast(ngettext("Downloading {} chapter", "Downloading {} chapters", count).format(count))
 
     def clear_box(self, box):
         while child := box.get_first_child():
@@ -183,11 +221,9 @@ class MangaPage(Adw.NavigationPage):
 
     @Gtk.Template.Callback()
     def get_read_button_label(self, obj, chapter):
-        if chapter is None:
-            return "..."
-        if chapter.source_order > 1:
+        if chapter is not None and chapter.source_order > 1:
             return _("Continue")
-        return _("Start")
+        return _("Read")
 
     @Gtk.Template.Callback()
     def get_library_icon_name(self, obj, in_library):
@@ -204,8 +240,3 @@ class MangaPage(Adw.NavigationPage):
     @Gtk.Template.Callback()
     def get_description(self, obj, description):
         return markdown_to_pango(description)
-
-    @Gtk.Template.Callback()
-    def on_download_clicked(self, button):
-        asyncio.create_task(DownloadDialog.start(self.model, self))
-

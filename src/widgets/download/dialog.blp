@@ -4,7 +4,7 @@ using Adw 1;
 template $KaoriDownloadDialog : Adw.Dialog {
   title: _("Download");
   content-width: 420;
-  content-height: 585;
+  content-height: 600;
 
   child: Adw.ToolbarView {
     [top]
@@ -17,7 +17,6 @@ template $KaoriDownloadDialog : Adw.Dialog {
         Adw.WrapBox {
           line-spacing: 6;
           child-spacing: 6;
-          justify: fill;
 
           Gtk.Button preset_next {
             label: _("Next");
@@ -77,6 +76,7 @@ template $KaoriDownloadDialog : Adw.Dialog {
       Adw.PreferencesGroup {
         Adw.ActionRow summary_row {
           title: _("Nothing to download");
+          subtitle: _("Chapters that are already downloaded are skipped");
         }
       }
     };

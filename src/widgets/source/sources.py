@@ -1,6 +1,8 @@
 import asyncio
 from gi.repository import Adw, Gio, GLib, GObject, Gtk
 
+from ...integrations.suwayomi import watch
+from ..common.lists import TopPin, find_scrolled
 from .card import SourceCard
 
 
@@ -16,6 +18,16 @@ class SourcesPage(Adw.NavigationPage):
         self.suwayomi = Gio.Application.get_default().suwayomi
         self.sources = self.suwayomi.sources
         asyncio.create_task(self.suwayomi.refreshSources())
+
+        scrolled = find_scrolled(self)
+        self.pin = TopPin(scrolled) if scrolled else None
+        if self.pin:
+            watch(self, self.sources, self.on_items_changed)
+            self.on_items_changed()
+
+    def on_items_changed(self):
+        if self.sources.get_n_items() > 0:
+            self.pin.content_ready()
 
     @Gtk.Template.Callback()
     def on_shown(self, *_):

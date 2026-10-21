@@ -12,24 +12,6 @@ DISPLAY_BINDINGS = (
     ("library-show-download-badge", "show-download-badge"),
 )
 
-OPTION_NAMES = (
-    "sort-key",
-    "reverse",
-    "filter-unread",
-    "filter-started",
-    "filter-downloaded",
-    "filter-bookmarked",
-    "filter-duplicates",
-    "status-cancelled",
-    "status-completed",
-    "status-licensed",
-    "status-ongoing",
-    "status-hiatus",
-    "status-finished",
-    "status-unknown",
-    "source-id",
-)
-
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/library/page.ui')
 class LibraryPage(Adw.NavigationPage):
@@ -39,7 +21,6 @@ class LibraryPage(Adw.NavigationPage):
     category_button = Gtk.Template.Child()
     options_dialog = Gtk.Template.Child()
     source_group = Gtk.Template.Child()
-    search_entry = Gtk.Template.Child()
 
     library_size = GObject.Property(type=int, default=0)
 
@@ -54,26 +35,26 @@ class LibraryPage(Adw.NavigationPage):
 
         self.options = models.LibraryOptions()
         for settings_key, option_name in DISPLAY_BINDINGS:
-            app.settings.bind(settings_key, self.options.card, option_name,
+            app.settings.bind(settings_key, self.options, option_name,
                               Gio.SettingsBindFlags.GET)
         self.manga_grid.use_options(self.options)
 
-        self.options_dialog.insert_action_group("library", self.make_actions())
+        actions = self.options.make_actions()
+        self.options_dialog.insert_action_group("library", actions)
         self.source_rows = []
 
         self.manga_grid.set_category(self.suwayomi.selected_category)
         watch(self, self.suwayomi, self.on_category_changed, "notify::selected-category")
+        self.update_category_button()
+        watch(self, self.suwayomi.categories, self.update_category_button)
 
         asyncio.create_task(self.suwayomi.refreshLibrary())
 
-    def make_actions(self):
-        group = Gio.SimpleActionGroup()
-        for name in OPTION_NAMES:
-            group.add_action(Gio.PropertyAction.new(name, self.options, name))
-        return group
-
     def on_category_changed(self):
         self.manga_grid.set_category(self.suwayomi.selected_category)
+
+    def update_category_button(self):
+        self.category_button.set_visible(self.suwayomi.categories.get_n_items() > 1)
 
     def add_source(self, label, source_id, first):
         check = Gtk.CheckButton(valign=Gtk.Align.CENTER)

@@ -4,12 +4,13 @@ from gettext import gettext as _
 from gi.repository import Gdk, Gio, GObject, Gtk
 
 from ...integrations import models
-from .base import WEBTOON_ZOOM_MIN, ReaderBase, adjacent_chapter
+from .base import ReaderBase, adjacent_chapter
 from .canvas import Canvas
 from .scroller import Scroller
 
 PREFETCH_PAGES = 6
 BANNER_RATIO = 2.2
+
 
 
 class TransitionPage(models.Page):
@@ -21,8 +22,6 @@ class TransitionPage(models.Page):
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/reader/webtoon.ui')
 class WebtoonReader(ReaderBase):
     __gtype_name__ = "KaoriWebtoonReader"
-
-    zoom_min = WEBTOON_ZOOM_MIN
 
     orientation = GObject.Property(type=Gtk.Orientation, default=Gtk.Orientation.VERTICAL)
 
@@ -75,16 +74,6 @@ class WebtoonReader(ReaderBase):
     def zoom_to(self, value, x, y):
         self.canvas.set_zoom_anchored(value, x, y)
 
-    def animate_zoom(self, value, x, y):
-        self.scroller.stop_all()
-        self.cancel_kinetic()
-        super().animate_zoom(value, x, y)
-
-    def on_pinch_begin(self, gesture, sequence):
-        self.scroller.stop_all()
-        self.cancel_kinetic()
-        super().on_pinch_begin(gesture, sequence)
-
     def retry_failed(self):
         self.canvas.retry_failed()
 
@@ -93,12 +82,6 @@ class WebtoonReader(ReaderBase):
         self.scrolled_window.set_kinetic_scrolling(True)
 
     def on_user_scroll(self, controller, dx, dy):
-        state = controller.get_current_event_state()
-        ctrl = bool(state & Gdk.ModifierType.CONTROL_MASK)
-        is_wheel = controller.get_unit() == Gdk.ScrollUnit.WHEEL
-        if is_wheel and not ctrl and dy:
-            self.scroller.wheel(dy)
-            return Gdk.EVENT_STOP
         self.scroller.stop_all()
         return Gdk.EVENT_PROPAGATE
 

@@ -7,15 +7,11 @@ SCROLL_ACCEL_TIME = 0.08
 SCROLL_DECEL_TIME = 0.18
 SCROLL_STOP_SPEED = 5
 MAX_FRAME_DELTA = 0.05
-NOMINAL_FRAME = 1 / 60
 PAGE_SCROLL_RATIO = 0.9
 FLING_DECEL_TIME = 0.35
 FLING_MIN_SPEED = 200
 FLING_MAX_SPEED = 6000
 FLING_IDLE_TIME = 0.08
-WHEEL_DISTANCE = 110
-WHEEL_DECEL_TIME = 0.2
-DRAG_THRESHOLD = 4
 
 
 class Scroller:
@@ -27,12 +23,12 @@ class Scroller:
         self.velocity = 0.0
         self.decel_time = SCROLL_DECEL_TIME
         self.tick_id = 0
-        self.last_frame_time = None
+        self.last_frame_time = 0
 
         self.dragging = False
         self.moved = False
-        self.last_x = 0.0
-        self.last_y = 0.0
+        self.origin_x = 0.0
+        self.origin_y = 0.0
         self.drag_velocity = 0.0
         self.last_time = 0.0
         self.last_offset = 0.0
@@ -55,17 +51,15 @@ class Scroller:
     def ensure_ticking(self):
         if self.tick_id:
             return
-        # The frame clock's last frame time can be seconds old after idle, so
-        # the first tick must not measure elapsed time against it.
-        self.last_frame_time = None
+        clock = self.webtoon.get_frame_clock()
+        if clock is None:
+            return
+        self.last_frame_time = clock.get_frame_time()
         self.tick_id = self.webtoon.add_tick_callback(self.on_tick)
 
     def on_tick(self, widget, frame_clock):
         frame_time = frame_clock.get_frame_time()
-        if self.last_frame_time is None:
-            elapsed = NOMINAL_FRAME
-        else:
-            elapsed = (frame_time - self.last_frame_time) / GLib.USEC_PER_SEC
+        elapsed = (frame_time - self.last_frame_time) / GLib.USEC_PER_SEC
         self.last_frame_time = frame_time
         elapsed = min(max(elapsed, 0.0), MAX_FRAME_DELTA)
 
@@ -104,15 +98,6 @@ class Scroller:
         self.decel_time = decel_time
         self.ensure_ticking()
 
-    def wheel(self, steps):
-        self.key_direction = 0
-        if not self.tick_id:
-            self.webtoon.cancel_kinetic()
-        impulse = steps * WHEEL_DISTANCE / WHEEL_DECEL_TIME
-        velocity = self.velocity + impulse
-        velocity = max(-FLING_MAX_SPEED, min(FLING_MAX_SPEED, velocity))
-        self.fling(velocity, WHEEL_DECEL_TIME)
-
     def scroll_page(self, direction):
         self.key_direction = 0
         self.webtoon.cancel_kinetic()
@@ -130,8 +115,8 @@ class Scroller:
 
         self.dragging = True
         self.moved = False
-        self.last_x = 0.0
-        self.last_y = 0.0
+        self.origin_x = self.canvas.hadjustment.get_value()
+        self.origin_y = self.canvas.vadjustment.get_value()
         self.drag_velocity = 0.0
         self.last_time = self.now()
         self.last_offset = 0.0
@@ -141,22 +126,13 @@ class Scroller:
             return
 
         if not self.moved:
-            if math.hypot(offset_x, offset_y) < DRAG_THRESHOLD:
-                return
             self.moved = True
             self.stop_all()
             self.webtoon.cancel_kinetic()
             self.webtoon.set_cursor_from_name("grabbing")
-            self.last_x, self.last_y = offset_x, offset_y
-            self.last_offset = offset_y if self.canvas.vertical else offset_x
-            self.last_time = self.now()
-            return
 
-        hadjustment = self.canvas.hadjustment
-        vadjustment = self.canvas.vadjustment
-        hadjustment.set_value(hadjustment.get_value() - (offset_x - self.last_x))
-        vadjustment.set_value(vadjustment.get_value() - (offset_y - self.last_y))
-        self.last_x, self.last_y = offset_x, offset_y
+        self.canvas.hadjustment.set_value(self.origin_x - offset_x)
+        self.canvas.vadjustment.set_value(self.origin_y - offset_y)
 
         now = self.now()
         elapsed = now - self.last_time

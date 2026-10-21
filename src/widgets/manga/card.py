@@ -3,18 +3,19 @@ from gi.repository import Gtk, GObject
 from ...integrations import models
 from ..common.manga_menu import MangaMenu
 
+DEFAULT_OPTIONS = models.LibraryOptions(show_unread_badge=False)
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/manga/card.ui')
 class MangaCard(Gtk.Box):
     __gtype_name__ = "KaoriMangaCard"
 
     model = GObject.Property(type=models.Manga)
-    options = GObject.Property(type=models.CardOptions)
+    options = GObject.Property(type=models.LibraryOptions)
     show_title = GObject.Property(type=bool, default=True)
 
     def __init__(self, model=None, **kwargs):
         super().__init__(**kwargs)
-        self.options = models.CardOptions(show_unread_badge=False)
+        self.options = DEFAULT_OPTIONS
         if model is not None:
             self.model = model
         self.manga_menu = MangaMenu(self, lambda: self.model)

@@ -5,40 +5,10 @@ from gi.repository import Adw, Gio, GLib, GObject, Gtk
 from ...integrations import models
 from ...integrations.suwayomi import watch
 from ..common.dates import day_title, to_datetime
-from ..common.lists import sync_store
+from ..common.lists import TopPin, sync_store
 from .row import UpdatesRow
 
 REFRESH_DELAY = 2
-
-
-def first_unread(chapters):
-    for chapter in reversed(chapters):
-        if not chapter.is_read:
-            return chapter
-    return chapters[0]
-
-
-def apply_chapters(entry):
-    entry.update_data(
-        chapter=first_unread(entry.chapters),
-        chapter_count=len(entry.chapters),
-        revision=entry.revision + 1,
-    )
-
-
-def add_to_entry(entry, chapter):
-    if chapter in entry.chapters:
-        return
-    entry.chapters.append(chapter)
-    apply_chapters(entry)
-
-
-def set_entry_chapters(entry, chapters):
-    chapters = list(chapters)
-    if chapters == entry.chapters:
-        return
-    entry.chapters = chapters
-    apply_chapters(entry)
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/updates/page.ui')
@@ -65,6 +35,7 @@ class UpdatesPage(Adw.NavigationPage):
         self.generation = 0
         self.task = None
         self.refresh_id = 0
+        self.pin = TopPin(self.scrolled)
 
         watch(self, self.suwayomi, self.on_updates_changed, "notify::updates-revision")
         self.scrolled.get_vadjustment().connect("changed", self.on_adjustment_changed)
@@ -112,6 +83,8 @@ class UpdatesPage(Adw.NavigationPage):
         if not refresh:
             return await self.suwayomi.getUpdates(self.offset)
 
+        # A refresh reloads everything already shown, so rows further down the
+        # list aren't dropped (which would also move the scroll position).
         wanted = max(self.offset, 1)
         chapters = []
         while True:
@@ -161,10 +134,16 @@ class UpdatesPage(Adw.NavigationPage):
 
         if self.entries.get_n_items() > 0:
             self.state = "list"
+            self.pin.content_ready()
         elif not has_next:
             self.state = "empty"
 
     def merge_entries(self, chapters):
+        """
+        Rebuilds the entries from fresh data, reusing the existing entry for
+        every day and manga that is already shown. Reused entries keep their
+        expanded state and their row widgets.
+        """
         entry_by_key = {}
         fresh = []
         for chapter in chapters:
@@ -177,7 +156,7 @@ class UpdatesPage(Adw.NavigationPage):
             if existing is None:
                 merged.append(entry)
                 continue
-            set_entry_chapters(existing, entry.chapters)
+            existing.set_chapters(entry.chapters)
             entry_by_key[key] = existing
             merged.append(existing)
 
@@ -206,7 +185,7 @@ class UpdatesPage(Adw.NavigationPage):
             entry = models.UpdatesEntry(chapter.manga, day_number, day_title(when))
             entry_by_key[key] = entry
             created.append(entry)
-        add_to_entry(entry, chapter)
+        entry.add_chapter(chapter)
 
     def open_chapter(self, chapter):
         self.activate_action(

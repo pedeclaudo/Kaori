@@ -35,7 +35,7 @@ template $KaoriMangaCard : Gtk.Box {
         margin-start: 6;
         margin-top: 6;
         label: bind $number_text(template.model as <$KaoriManga> .unread_count) as <string>;
-        visible: bind $badge_visible(template.options as <$KaoriCardOptions> .show_unread_badge, template.model as <$KaoriManga> .unread_count) as <bool>;
+        visible: bind $badge_visible(template.options as <$KaoriLibraryOptions> .show_unread_badge, template.model as <$KaoriManga> .unread_count) as <bool>;
       }
 
       [overlay]
@@ -49,7 +49,7 @@ template $KaoriMangaCard : Gtk.Box {
         margin-end: 6;
         margin-top: 6;
         label: bind $number_text(template.model as <$KaoriManga> .download_count) as <string>;
-        visible: bind $badge_visible(template.options as <$KaoriCardOptions> .show_download_badge, template.model as <$KaoriManga> .download_count) as <bool>;
+        visible: bind $badge_visible(template.options as <$KaoriLibraryOptions> .show_download_badge, template.model as <$KaoriManga> .download_count) as <bool>;
       }
 
       [overlay]
@@ -66,7 +66,7 @@ template $KaoriMangaCard : Gtk.Box {
         margin-bottom: 6;
         ellipsize: end;
         label: bind template.model as <$KaoriManga> .title;
-        visible: bind $overlay_title_visible(template.show_title, template.options as <$KaoriCardOptions> .display_mode) as <bool>;
+        visible: bind $overlay_title_visible(template.show_title, template.options as <$KaoriLibraryOptions> .display_mode) as <bool>;
       }
     };
   }
@@ -76,7 +76,7 @@ template $KaoriMangaCard : Gtk.Box {
       "heading"
     ]
     text: bind template.model as <$KaoriManga> .title;
-    visible: bind $title_visible(template.show_title, template.options as <$KaoriCardOptions> .display_mode) as <bool>;
+    visible: bind $title_visible(template.show_title, template.options as <$KaoriLibraryOptions> .display_mode) as <bool>;
     hexpand: true;
     valign: center;
     xalign: 0.0;

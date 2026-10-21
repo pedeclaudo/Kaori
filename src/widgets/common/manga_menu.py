@@ -1,5 +1,5 @@
 import asyncio
-from gettext import gettext as _
+from gettext import gettext as _, ngettext
 
 from gi.repository import Gdk, Gio, GLib, Gtk
 
@@ -34,7 +34,6 @@ class MangaMenu:
         self.popover = Gtk.PopoverMenu.new_from_model(menu)
         self.popover.set_has_arrow(False)
         self.popover.set_parent(widget)
-        self.popover.set_halign(Gtk.Align.START)
 
         right_click = Gtk.GestureClick(button=3)
         right_click.connect("pressed", self.on_right_click)
@@ -78,7 +77,7 @@ class MangaMenu:
         self.widget.activate_action("app.edit_categories", GLib.Variant("i", self.get_manga().id))
 
     def on_download(self, *args):
-        asyncio.create_task(DownloadDialog.choose(self.get_manga(), self.widget))
+        asyncio.create_task(self.choose_downloads())
 
     def on_remove(self, *args):
         asyncio.create_task(self.set_library(False))
@@ -93,3 +92,20 @@ class MangaMenu:
             self.show_toast(_("{} added to library").format(manga.title))
         else:
             self.show_toast(_("{} removed from library").format(manga.title))
+
+    async def choose_downloads(self):
+        manga = self.get_manga()
+        await self.suwayomi.getChapters(manga.id)
+        if manga.chapters.get_n_items() == 0:
+            self.show_toast(_("No chapters to download"))
+            return
+        DownloadDialog(manga, self.on_chapters_chosen).present(self.widget)
+
+    def on_chapters_chosen(self, chapters):
+        asyncio.create_task(self.download_chapters(chapters))
+
+    async def download_chapters(self, chapters):
+        for chapter in chapters:
+            await self.suwayomi.enqueueChapterDownload(chapter.id)
+        count = len(chapters)
+        self.show_toast(ngettext("Downloading {} chapter", "Downloading {} chapters", count).format(count))

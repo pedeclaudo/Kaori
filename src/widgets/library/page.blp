@@ -30,11 +30,10 @@ template $KaoriLibraryPage : Adw.NavigationPage {
       child: Adw.ToolbarView {
         [top]
         Adw.HeaderBar {
-          title-widget: Gtk.SearchEntry search_entry {
+          title-widget: Gtk.SearchEntry {
             hexpand: true;
             placeholder-text: _("Find a manga");
             search-changed => $on_search_changed();
-            key-capture-widget: template;
           };
 
           [start]

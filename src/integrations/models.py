@@ -1,4 +1,62 @@
+from gettext import gettext as _
+
 from gi.repository import Gdk, Gio, GObject
+
+
+OPTION_NAMES = (
+    "sort-key",
+    "reverse",
+    "filter-unread",
+    "filter-started",
+    "filter-downloaded",
+    "filter-bookmarked",
+    "filter-duplicates",
+    "status-cancelled",
+    "status-completed",
+    "status-licensed",
+    "status-ongoing",
+    "status-hiatus",
+    "status-finished",
+    "status-unknown",
+    "source-id",
+)
+
+STATUS_PROPERTIES = {
+    "CANCELLED": "status_cancelled",
+    "COMPLETED": "status_completed",
+    "LICENSED": "status_licensed",
+    "ONGOING": "status_ongoing",
+    "ON_HIATUS": "status_hiatus",
+    "PUBLISHING_FINISHED": "status_finished",
+    "UNKNOWN": "status_unknown",
+}
+
+
+def to_number(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def chapter_time(chapter, name):
+    if chapter is None:
+        return 0
+    return to_number(getattr(chapter, name))
+
+
+def compare(first, second):
+    return (first > second) - (first < second)
+
+
+def title_key(manga):
+    return (manga.title or "").lower()
+
+
+def chapter_title(name, number):
+    if name:
+        return name
+    return _("Chapter {}").format(f"{number:g}")
 
 
 class BasicModel(GObject.Object):
@@ -27,7 +85,6 @@ class Chapter(BasicModel):
     source_order = GObject.Property(type=int, default=0)
     chapter_number = GObject.Property(type=float, default=0.0)
     name = GObject.Property(type=str, default="")
-    scanlator = GObject.Property(type=str, default="")
     page_count = GObject.Property(type=int, default=0)
     upload_date = GObject.Property(type=str, default="")
     fetched_at = GObject.Property(type=str, default="")
@@ -36,6 +93,10 @@ class Chapter(BasicModel):
     is_downloaded = GObject.Property(type=bool, default=False)
     is_read = GObject.Property(type=bool, default=False)
     last_page_read = GObject.Property(type=int, default=0)
+
+    @property
+    def title(self):
+        return chapter_title(self.name, self.chapter_number)
 
 
 class Manga(BasicModel):
@@ -67,6 +128,21 @@ class Manga(BasicModel):
 
     def __init__(self):
         super().__init__(chapters=Gio.ListStore(item_type=Chapter))
+        self.connect("notify::description", lambda *args: self.notify("short-description"))
+
+    @GObject.Property(type=str)
+    def short_description(self):
+        return (self.description or "").strip().split("\n\n")[0].strip()
+
+    def sorted_chapters(self):
+        return sorted(self.chapters, key=lambda chapter: chapter.source_order)
+
+    def first_unread_index(self):
+        chapters = self.sorted_chapters()
+        for index, chapter in enumerate(chapters):
+            if not chapter.is_read:
+                return index
+        return len(chapters)
 
 
 class Category(BasicModel):
@@ -120,13 +196,6 @@ class Download(BasicModel):
     tries = GObject.Property(type=int, default=0)
 
 
-class CardOptions(GObject.Object):
-    __gtype_name__ = 'KaoriCardOptions'
-    display_mode = GObject.Property(type=str, default="comfortable")
-    show_unread_badge = GObject.Property(type=bool, default=True)
-    show_download_badge = GObject.Property(type=bool, default=False)
-
-
 class LibraryOptions(GObject.Object):
     __gtype_name__ = 'KaoriLibraryOptions'
     sort_key = GObject.Property(type=str, default="alphabetical")
@@ -144,21 +213,63 @@ class LibraryOptions(GObject.Object):
     status_finished = GObject.Property(type=bool, default=False)
     status_unknown = GObject.Property(type=bool, default=False)
     source_id = GObject.Property(type=str, default="")
+    display_mode = GObject.Property(type=str, default="comfortable")
+    show_unread_badge = GObject.Property(type=bool, default=True)
+    show_download_badge = GObject.Property(type=bool, default=False)
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.card = CardOptions()
+    def make_actions(self):
+        group = Gio.SimpleActionGroup()
+        for name in OPTION_NAMES:
+            group.add_action(Gio.PropertyAction.new(name, self, name))
+        return group
 
+    def matches(self, manga):
+        if self.filter_unread and manga.unread_count <= 0:
+            return False
+        if self.filter_started and manga.last_read_chapter is None:
+            return False
+        if self.filter_downloaded and manga.download_count <= 0:
+            return False
+        if self.filter_bookmarked and manga.bookmark_count <= 0:
+            return False
+        if self.filter_duplicates and not manga.has_duplicate_chapters:
+            return False
+        if self.source_id and manga.source_id != self.source_id:
+            return False
 
-class ChapterOptions(GObject.Object):
-    __gtype_name__ = 'KaoriChapterOptions'
-    sort_key = GObject.Property(type=str, default="source")
-    descending = GObject.Property(type=bool, default=True)
-    filter_unread = GObject.Property(type=bool, default=False)
-    filter_downloaded = GObject.Property(type=bool, default=False)
-    filter_bookmarked = GObject.Property(type=bool, default=False)
-    scanlator = GObject.Property(type=str, default="")
-    display_mode = GObject.Property(type=str, default="title")
+        chosen = []
+        for status, name in STATUS_PROPERTIES.items():
+            if getattr(self, name):
+                chosen.append(status)
+        if chosen and (manga.status or "UNKNOWN") not in chosen:
+            return False
+        return True
+
+    def sort_number(self, manga):
+        key = self.sort_key
+        if key == "unread":
+            return manga.unread_count
+        if key == "total":
+            return manga.total_chapters
+        if key == "added":
+            return to_number(manga.in_library_at)
+        if key == "read":
+            return chapter_time(manga.last_read_chapter, "last_read_at")
+        if key == "fetched":
+            return chapter_time(manga.latest_fetched_chapter, "fetched_at")
+        return chapter_time(manga.latest_uploaded_chapter, "upload_date")
+
+    def compare_manga(self, first, second):
+        if self.sort_key == "alphabetical":
+            result = compare(title_key(first), title_key(second))
+        else:
+            result = compare(self.sort_number(second), self.sort_number(first))
+            if result == 0:
+                result = compare(title_key(first), title_key(second))
+        if self.reverse:
+            result = -result
+        return result
+
 
 class HistoryEntry(BasicModel):
     __gtype_name__ = 'KaoriHistoryEntry'
@@ -174,6 +285,27 @@ class HistoryEntry(BasicModel):
         super().__init__(manga=manga, day_number=day_number, day_title=day_title)
         self.chapters = []
 
+    def add_chapter(self, chapter):
+        if chapter in self.chapters:
+            return
+        self.chapters.append(chapter)
+        self.update_data(
+            chapter=self.chapters[0],
+            chapter_count=len(self.chapters),
+            revision=self.revision + 1,
+        )
+
+    def set_chapters(self, chapters):
+        chapters = list(chapters)
+        if chapters == self.chapters:
+            return
+        self.chapters = chapters
+        self.update_data(
+            chapter=self.chapters[0],
+            chapter_count=len(self.chapters),
+            revision=self.revision + 1,
+        )
+
 
 class UpdatesEntry(BasicModel):
     __gtype_name__ = 'KaoriUpdatesEntry'
@@ -188,3 +320,30 @@ class UpdatesEntry(BasicModel):
     def __init__(self, manga, day_number, day_title):
         super().__init__(manga=manga, day_number=day_number, day_title=day_title)
         self.chapters = []
+
+    def add_chapter(self, chapter):
+        if chapter in self.chapters:
+            return
+        self.chapters.append(chapter)
+        self.update_data(
+            chapter=self.first_unread(),
+            chapter_count=len(self.chapters),
+            revision=self.revision + 1,
+        )
+
+    def set_chapters(self, chapters):
+        chapters = list(chapters)
+        if chapters == self.chapters:
+            return
+        self.chapters = chapters
+        self.update_data(
+            chapter=self.first_unread(),
+            chapter_count=len(self.chapters),
+            revision=self.revision + 1,
+        )
+
+    def first_unread(self):
+        for chapter in reversed(self.chapters):
+            if not chapter.is_read:
+                return chapter
+        return self.chapters[0]
