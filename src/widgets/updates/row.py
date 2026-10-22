@@ -10,6 +10,14 @@ from ..common.dates import to_datetime
 READ_OPACITY = 0.55
 
 
+def chapter_title(name, number):
+    if name:
+        return name
+    if number == int(number):
+        return _("Chapter {}").format(int(number))
+    return _("Chapter {}").format(number)
+
+
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/updates/row.ui')
 class UpdatesRow(Gtk.Box):
     __gtype_name__ = "KaoriUpdatesRow"
@@ -33,13 +41,8 @@ class UpdatesRow(Gtk.Box):
         self.bindings = []
 
         self.chapter_store = Gio.ListStore(item_type=models.Chapter)
-        # ChapterRow's title binding reads options.display_mode and shows
-        # nothing while options is unset.
         self.chapter_options = models.ChapterOptions()
 
-        # A ListBox sizes itself to its rows, which is what a short list
-        # inside a Revealer needs. A ListView outside a ScrolledWindow can
-        # end up with no height.
         self.chapter_list = Gtk.ListBox(
             selection_mode=Gtk.SelectionMode.NONE,
             css_classes=["inherit-color", "navigation-sidebar"],
@@ -101,7 +104,7 @@ class UpdatesRow(Gtk.Box):
 
     @Gtk.Template.Callback()
     def subtitle_text(self, obj, name, number, is_read, page_count, last_page_read):
-        parts = [models.chapter_title(name, number)]
+        parts = [chapter_title(name, number)]
 
         if is_read:
             parts.append(_("Finished"))

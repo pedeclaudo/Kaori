@@ -10,13 +10,10 @@ LOCAL_SOURCE_URL = "https://github.com/Suwayomi/Suwayomi-Server/wiki/Local-Sourc
 FOLDERS = {
     "downloads_folder_row": ("downloadsPath", "downloads"),
     "local_folder_row": ("localSourcePath", "local"),
-    "backups_folder_row": ("backupPath", "backups"),
 }
 
 SETTINGS = {
     "cbz_row": "downloadAsCbz",
-    "update_interval_row": "globalUpdateInterval",
-    "backup_interval_row": "backupInterval",
 }
 
 
@@ -39,9 +36,6 @@ class SetupWindow(Adw.ApplicationWindow):
     downloads_folder_row = Gtk.Template.Child()
     local_page = Gtk.Template.Child()
     local_folder_row = Gtk.Template.Child()
-    updates_page = Gtk.Template.Child()
-    backups_page = Gtk.Template.Child()
-    backups_folder_row = Gtk.Template.Child()
     done_page = Gtk.Template.Child()
     back_button = Gtk.Template.Child()
     next_button = Gtk.Template.Child()
@@ -59,17 +53,17 @@ class SetupWindow(Adw.ApplicationWindow):
         self.local_pages = (
             self.downloads_page,
             self.local_page,
-            self.updates_page,
-            self.backups_page,
         )
         self.folder_rows = (
             self.downloads_folder_row,
             self.local_folder_row,
-            self.backups_folder_row,
         )
 
         if error:
             self.status_page.set_description(error)
+
+        for row in self.folder_rows:
+            self.update_folder_row(row)
 
         for page in self.local_pages:
             self.carousel.remove(page)
@@ -83,8 +77,10 @@ class SetupWindow(Adw.ApplicationWindow):
 
     def update_nav(self):
         last = self.carousel.get_n_pages() - 1
-        self.back_button.set_visible(self.current > 0)
-        self.next_button.set_visible(self.current > 0)
+        show = self.current > 0
+        for button in (self.back_button, self.next_button):
+            button.set_opacity(1 if show else 0)
+            button.set_sensitive(show)
         self.next_button.set_label('Get Started' if self.current >= last else 'Next')
 
     def go_to(self, index: int):
@@ -96,8 +92,6 @@ class SetupWindow(Adw.ApplicationWindow):
     def set_local_steps(self, enabled: bool):
         present = self.downloads_page.get_parent() is not None
         if enabled and not present:
-            for row in self.folder_rows:
-                self.update_folder_row(row)
             for page in self.local_pages:
                 self.carousel.insert(page, self.carousel.get_n_pages() - 1)
         elif not enabled and present:
@@ -110,7 +104,12 @@ class SetupWindow(Adw.ApplicationWindow):
         return self.changes.get(setting) or self.app.server.default_folder(folder_name)
 
     def update_folder_row(self, row):
-        row.set_subtitle(self.folder_for(row))
+        setting, folder_name = FOLDERS[row_key(row)]
+        path = self.changes.get(setting)
+        if path:
+            row.set_subtitle(Gio.File.new_for_path(path).get_basename())
+        else:
+            row.set_subtitle("Default")
 
     def set_folder_path(self, row, path: str):
         setting, folder_name = FOLDERS[row_key(row)]
@@ -161,10 +160,6 @@ class SetupWindow(Adw.ApplicationWindow):
     @Gtk.Template.Callback()
     def on_switch_toggled(self, row, pspec):
         self.changes[SETTINGS[row_key(row)]] = row.get_active()
-
-    @Gtk.Template.Callback()
-    def on_spin_changed(self, row, pspec):
-        self.changes[SETTINGS[row_key(row)]] = int(row.get_value())
 
     @Gtk.Template.Callback()
     def on_path_activated(self, row):

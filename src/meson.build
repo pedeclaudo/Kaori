@@ -34,7 +34,7 @@ kaori_sources = [
 
 install_data(kaori_sources, install_dir: moduledir)
 install_data(
-  'Suwayomi-Server-v2.4.2422.jar',
+  'Suwayomi-Server-v2.4.2366.jar',
   install_dir: pkgdatadir,
   rename: 'Suwayomi-Server.jar',
 )

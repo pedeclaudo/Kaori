@@ -41,9 +41,6 @@ class HistoryPage(Adw.NavigationPage):
     scrolled = Gtk.Template.Child()
 
     entries = GObject.Property(type=Gio.ListStore)
-    state = GObject.Property(type=str, default="loading")
-    error_message = GObject.Property(type=str, default="")
-    loading_more = GObject.Property(type=bool, default=False)
 
     def __init__(self):
         super().__init__()
@@ -54,7 +51,6 @@ class HistoryPage(Adw.NavigationPage):
         self.offset = 0
         self.has_next = True
         self.loading = False
-        self.load_failed = False
         self.generation = 0
         self.task = None
         self.refresh_id = 0
@@ -88,12 +84,10 @@ class HistoryPage(Adw.NavigationPage):
             self.task.cancel()
             self.task = None
         self.loading = False
-        self.loading_more = False
 
         refresh = silent and self.entries.get_n_items() > 0
         if not refresh:
             self.clear()
-            self.state = "loading"
         self.task = asyncio.create_task(self.load(refresh))
 
     def load_more(self):
@@ -115,10 +109,7 @@ class HistoryPage(Adw.NavigationPage):
 
     async def load(self, refresh: bool):
         generation = self.generation
-        offset = 0 if refresh else self.offset
         self.loading = True
-        self.load_failed = False
-        self.loading_more = offset > 0
 
         try:
             chapters, has_next = await self.fetch(refresh)
@@ -127,19 +118,12 @@ class HistoryPage(Adw.NavigationPage):
                 return
             print(f"history load failed: {error}")
             self.loading = False
-            self.loading_more = False
-            if self.entries.get_n_items() > 0:
-                self.load_failed = True
-            else:
-                self.error_message = str(error)
-                self.state = "error"
             return
 
         if generation != self.generation:
             return
 
         self.loading = False
-        self.loading_more = False
         self.has_next = has_next
 
         if refresh:
@@ -151,11 +135,6 @@ class HistoryPage(Adw.NavigationPage):
                 self.add_chapter(chapter, self.entry_by_key, created)
             self.entries.splice(self.entries.get_n_items(), 0, created)
             self.offset += len(chapters)
-
-        if self.entries.get_n_items() > 0:
-            self.state = "list"
-        elif not has_next:
-            self.state = "empty"
 
     def merge_entries(self, chapters):
         entry_by_key = {}
@@ -183,7 +162,6 @@ class HistoryPage(Adw.NavigationPage):
         self.offset = 0
         self.has_next = True
         self.loading = False
-        self.load_failed = False
 
     def add_chapter(self, chapter, entry_by_key, created):
         if chapter.manga is None:
@@ -211,12 +189,16 @@ class HistoryPage(Adw.NavigationPage):
         self.open_chapter(chapter)
 
     def on_adjustment_changed(self, adjustment):
-        if self.load_failed or self.loading or not self.has_next:
+        if self.loading or not self.has_next:
             return
         if self.entries.get_n_items() == 0:
             return
         if adjustment.get_upper() <= adjustment.get_page_size() + 1:
             self.load_more()
+
+    @Gtk.Template.Callback()
+    def get_page(self, obj, count):
+        return "history" if count > 0 else "greeter"
 
     @Gtk.Template.Callback()
     def on_setup(self, factory, list_item):
@@ -253,11 +235,6 @@ class HistoryPage(Adw.NavigationPage):
             entry.expanded = not entry.expanded
 
     @Gtk.Template.Callback()
-    def on_retry_clicked(self, button):
-        self.reload()
-
-    @Gtk.Template.Callback()
     def on_edge_reached(self, scrolled, position):
         if position == Gtk.PositionType.BOTTOM:
-            self.load_failed = False
             self.load_more()
