@@ -1,4 +1,5 @@
-from gi.repository import Adw, Gio, GObject, Gtk
+from gi.repository import Gio, GObject, Gtk
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 from ...integrations.suwayomi import watch
 from .category_edit import CategoryEditDialog
@@ -7,7 +8,7 @@ from .category_row import CategoryRow
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/library/category_panel.ui')
-class CategoryPanel(Adw.Bin):
+class CategoryPanel(Box):
     __gtype_name__ = 'KaoriCategoryPanel'
     __gsignals__ = {'activated': (GObject.SignalFlags.RUN_FIRST, None, ())}
 

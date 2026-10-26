@@ -1,11 +1,12 @@
-from gi.repository import Adw, GObject, Gtk
+from gi.repository import GObject, Gtk
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 ORIENTATIONS = [Gtk.Orientation.VERTICAL, Gtk.Orientation.HORIZONTAL]
 DIRECTIONS = [Gtk.TextDirection.LTR, Gtk.TextDirection.RTL]
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/reader/dialog.ui')
-class SettingsDialog(Adw.Dialog):
+class SettingsDialog(Dialog):
     __gtype_name__ = "KaoriSettingsDialog"
 
     stack = GObject.Property(type=Gtk.Widget)

@@ -1,11 +1,12 @@
 import asyncio
-from gi.repository import Adw, Gio, GLib, GObject, Gtk
+from gi.repository import Gio, GLib, GObject, Gtk
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 from .card import SourceCard
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/source/sources.ui')
-class SourcesPage(Adw.NavigationPage):
+class SourcesPage(NavigationPage):
     __gtype_name__ = "KaoriSourcesPage"
 
     search_text = GObject.Property(type=str)

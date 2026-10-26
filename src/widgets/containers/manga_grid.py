@@ -1,4 +1,5 @@
-from gi.repository import Gtk, Adw, Gio, GLib
+from gi.repository import Gtk, Gio, GLib
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 from ..manga import MangaCard
 from ...integrations import models
 from ...integrations.suwayomi import watch
@@ -36,7 +37,7 @@ def title_key(manga):
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/containers/manga_grid.ui')
-class MangaGrid(Adw.BreakpointBin):
+class MangaGrid(BreakpointBin):
     __gtype_name__ = 'KaoriMangaGrid'
 
     grid = Gtk.Template.Child()

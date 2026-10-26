@@ -2,7 +2,8 @@ import asyncio
 import os
 import sys
 
-from gi.repository import Adw, Gio, GLib, GObject, Gtk
+from gi.repository import Gio, GLib, GObject, Gtk
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 from .extension_stores import ExtensionStoresDialog
 
@@ -61,7 +62,7 @@ def key_of(row) -> str:
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/preferences/preferences.ui')
-class KaoriPreferences(Adw.PreferencesDialog):
+class KaoriPreferences(PreferencesDialog):
     __gtype_name__ = "KaoriPreferencesDialog"
 
     orientation_row = Gtk.Template.Child()

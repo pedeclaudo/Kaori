@@ -1,7 +1,8 @@
 import re
 import asyncio
 from gettext import gettext as _, ngettext
-from gi.repository import Gtk, Adw, GObject, Gio, GLib
+from gi.repository import Gtk, GObject, Gio, GLib
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 from ...integrations import models
 
@@ -78,7 +79,7 @@ def markdown_to_pango(md: str) -> str:
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/manga/page.ui')
-class MangaPage(Adw.NavigationPage):
+class MangaPage(NavigationPage):
     __gtype_name__ = "KaoriMangaPage"
 
     model = GObject.Property(type=models.Manga)

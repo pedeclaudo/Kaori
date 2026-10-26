@@ -1,8 +1,9 @@
-from gi.repository import Gtk, Adw, Gio, GLib, Gdk, Pango, GObject
+from gi.repository import Gtk, Gio, GLib, Gdk, Pango, GObject
 
 import asyncio
 
 from .. import actions
+from ..compat import ApplicationWindow
 
 from .download import DownloadsPage
 from .updates import UpdatesPage
@@ -33,7 +34,7 @@ def find_title_label(widget):
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/window.ui')
-class KaoriWindow(Adw.ApplicationWindow):
+class KaoriWindow(ApplicationWindow):
     __gtype_name__ = 'KaoriWindow'
 
     name = GObject.Property(type=str)

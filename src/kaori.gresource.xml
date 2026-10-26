@@ -2,6 +2,7 @@
 <gresources>
   <gresource prefix="/io/github/riyaniii/Kaori">
     <file>style.css</file>
+    <file>theme.css</file>
     <file>icons/chain-link-symbolic.svg</file>
     <file>icons/compass-symbolic.svg</file>
     <file>icons/drive-harddisk-symbolic.svg</file>

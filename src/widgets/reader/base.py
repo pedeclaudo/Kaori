@@ -2,7 +2,8 @@ import asyncio
 import math
 from gettext import gettext as _
 
-from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk
+from gi.repository import Gdk, Gio, GLib, GObject, Gtk
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 from ...integrations import models
 
@@ -32,7 +33,7 @@ def adjacent_chapter(manga, chapter, direction):
     return manga.chapters.get_item(new_index)
 
 
-class ReaderBase(Adw.Bin):
+class ReaderBase(Box):
     __gtype_name__ = "KaoriReaderBase"
 
     zoom_min = ZOOM_MIN

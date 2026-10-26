@@ -1,0 +1,1133 @@
+/*
+ * Kaori Theme - Replaces libadwaita styling for cross-platform GTK4
+ * This provides a consistent look on Linux and Windows
+ */
+
+/* ============================================================================
+ * Color Definitions (Light Theme)
+ * ============================================================================ */
+
+@define-color bg_color #f6f5f4;
+@define-color fg_color #1c1b1a;
+@define-color base_color #ffffff;
+@define-color text_color #1c1b1a;
+@define-color selected_bg_color #3d8bfd;
+@define-color selected_fg_color #ffffff;
+@define-color accent_bg_color #3d8bfd;
+@define-color accent_fg_color #ffffff;
+@define-color accent_color #3d8bfd;
+@define-color destructive_bg_color #e01b24;
+@define-color destructive_fg_color #ffffff;
+@define-color border_color #c0b9b4;
+@define-color shade_color #000000;
+@define-color tooltip_bg_color #333333;
+@define-color tooltip_fg_color #ffffff;
+@define-color headerbar_bg #f6f5f4;
+@define-color headerbar_border #c0b9b4;
+@define-color headerbar_fg #1c1b1a;
+@define-color sidebar_bg #f6f5f4;
+@define-color sidebar_fg #1c1b1a;
+@define-color sidebar_backdrop #e8e7e5;
+@define-color card_bg #ffffff;
+@define-color card_border #e0ddd8;
+@define-color card_shadow rgba(0, 0, 0, 0.08);
+
+/* ============================================================================
+ * Dark Theme
+ * ============================================================================ */
+
+@media (prefers-color-scheme: dark) {
+  @define-color bg_color #1e1e1e;
+  @define-color fg_color #e0e0e0;
+  @define-color base_color #2d2d2d;
+  @define-color text_color #e0e0e0;
+  @define-color selected_bg_color #4a9eff;
+  @define-color selected_fg_color #ffffff;
+  @define-color accent_bg_color #4a9eff;
+  @define-color accent_fg_color #ffffff;
+  @define-color accent_color #4a9eff;
+  @define-color destructive_bg_color #f44336;
+  @define-color destructive_fg_color #ffffff;
+  @define-color border_color #444444;
+  @define-color shade_color #ffffff;
+  @define-color tooltip_bg_color #333333;
+  @define-color tooltip_fg_color #ffffff;
+  @define-color headerbar_bg #1e1e1e;
+  @define-color headerbar_border #444444;
+  @define-color headerbar_fg #e0e0e0;
+  @define-color sidebar_bg #1e1e1e;
+  @define-color sidebar_fg #e0e0e0;
+  @define-color sidebar_backdrop #2a2a2a;
+  @define-color card_bg #2d2d2d;
+  @define-color card_border #444444;
+  @define-color card_shadow rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================================================
+ * Base Widget Styling
+ * ============================================================================ */
+
+* {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: @text_color;
+  background-color: transparent;
+}
+
+window {
+  background-color: @bg_color;
+  color: @fg_color;
+}
+
+/* ============================================================================
+ * Header Bar (replaces Adw.HeaderBar)
+ * ============================================================================ */
+
+headerbar {
+  background-color: @headerbar_bg;
+  border-bottom: 1px solid @headerbar_border;
+  color: @headerbar_fg;
+  min-height: 48px;
+  padding: 0 12px;
+}
+
+headerbar.titlebar {
+  background-color: @headerbar_bg;
+}
+
+headerbar > * {
+  color: @headerbar_fg;
+}
+
+headerbar button {
+  background-color: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 10px;
+  min-width: 36px;
+  min-height: 36px;
+  transition: background-color 150ms ease;
+}
+
+headerbar button:hover {
+  background-color: alpha(@fg_color, 0.1);
+}
+
+headerbar button:active {
+  background-color: alpha(@fg_color, 0.15);
+}
+
+headerbar button:disabled {
+  opacity: 0.4;
+}
+
+headerbar button.flat {
+  background-color: transparent;
+  box-shadow: none;
+}
+
+headerbar button.suggested-action {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-weight: 600;
+}
+
+headerbar button.suggested-action:hover {
+  background-color: shade(@accent_bg_color, 0.9);
+}
+
+headerbar button.destructive-action {
+  background-color: @destructive_bg_color;
+  color: @destructive_fg_color;
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-weight: 600;
+}
+
+headerbar button.destructive-action:hover {
+  background-color: shade(@destructive_bg_color, 0.9);
+}
+
+/* Window controls */
+.titlebar > headerbar {
+  background-color: @headerbar_bg;
+}
+
+.window-controls {
+  margin-right: 4px;
+}
+
+.window-controls button {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 8px;
+}
+
+.window-controls button.close:hover {
+  background-color: #e81123;
+  color: white;
+}
+
+.window-controls button.maximize:hover,
+.window-controls button.minimize:hover {
+  background-color: alpha(@fg_color, 0.1);
+}
+
+/* ============================================================================
+ * Toolbar View (replaces Adw.ToolbarView)
+ * ============================================================================ */
+
+toolbarview {
+  background-color: @bg_color;
+}
+
+toolbarview > toolbar {
+  background-color: @headerbar_bg;
+  border-bottom: 1px solid @headerbar_border;
+}
+
+/* ============================================================================
+ * View Stack / View Switcher (replaces Adw.ViewStack, Adw.ViewSwitcher)
+ * ============================================================================ */
+
+viewstack {
+  background-color: @bg_color;
+}
+
+viewstack > * {
+  background-color: @bg_color;
+}
+
+viewswitcher {
+  background-color: transparent;
+}
+
+viewswitcher button {
+  background-color: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin: 0 2px;
+  color: @headerbar_fg;
+  font-weight: 500;
+  transition: all 150ms ease;
+}
+
+viewswitcher button:hover {
+  background-color: alpha(@fg_color, 0.1);
+}
+
+viewswitcher button:checked {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+viewswitcher button:checked:hover {
+  background-color: shade(@accent_bg_color, 0.9);
+}
+
+/* View Switcher Bar (replaces Adw.ViewSwitcherBar) */
+viewswitcherbar {
+  background-color: @headerbar_bg;
+  border-top: 1px solid @headerbar_border;
+  padding: 4px 8px;
+}
+
+/* ============================================================================
+ * Navigation View / Navigation Page (replaces Adw.NavigationView, Adw.NavigationPage)
+ * ============================================================================ */
+
+navigationview {
+  background-color: @bg_color;
+}
+
+navigationpage {
+  background-color: @bg_color;
+}
+
+/* ============================================================================
+ * Clamp (replaces Adw.Clamp)
+ * ============================================================================ */
+
+clamp {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* ============================================================================
+ * Status Page (replaces Adw.StatusPage)
+ * ============================================================================ */
+
+statuspage {
+  background-color: @bg_color;
+  padding: 48px 24px;
+}
+
+statuspage .title {
+  font-size: 24px;
+  font-weight: 600;
+  color: @fg_color;
+  margin-bottom: 8px;
+}
+
+statuspage .description {
+  font-size: 14px;
+  color: alpha(@fg_color, 0.7);
+  margin-bottom: 24px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+statuspage .icon {
+  color: alpha(@fg_color, 0.4);
+  font-size: 64px;
+}
+
+/* ============================================================================
+ * Preferences Dialog / Page / Group / Row (replaces Adw.Preferences*)
+ * ============================================================================ */
+
+preferencesdialog {
+  background-color: @bg_color;
+}
+
+preferencespage {
+  background-color: @bg_color;
+  padding: 16px;
+}
+
+preferencesgroup {
+  background-color: @card_bg;
+  border: 1px solid @card_border;
+  border-radius: 12px;
+  margin: 8px 0;
+  box-shadow: 0 1px 3px @card_shadow;
+}
+
+preferencesgroup:first-child {
+  margin-top: 0;
+}
+
+preferencesgroup:last-child {
+  margin-bottom: 0;
+}
+
+preferencesgroup > header {
+  padding: 12px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  color: @fg_color;
+  border-bottom: 1px solid @card_border;
+  background-color: alpha(@fg_color, 0.02);
+}
+
+preferencesgroup > box {
+  padding: 8px 0;
+}
+
+/* Action Row (replaces Adw.ActionRow) */
+actionrow {
+  padding: 12px 16px;
+  margin: 0;
+  background-color: transparent;
+  border: none;
+  min-height: 48px;
+}
+
+actionrow:hover {
+  background-color: alpha(@fg_color, 0.04);
+}
+
+actionrow:selected {
+  background-color: alpha(@accent_bg_color, 0.1);
+}
+
+actionrow .title {
+  font-weight: 500;
+  color: @fg_color;
+}
+
+actionrow .subtitle {
+  font-size: 12px;
+  color: alpha(@fg_color, 0.6);
+  margin-top: 2px;
+}
+
+actionrow .prefix,
+actionrow .suffix {
+  color: alpha(@fg_color, 0.5);
+}
+
+/* Entry Row (replaces Adw.EntryRow) */
+entryrow {
+  padding: 12px 16px;
+  min-height: 48px;
+}
+
+entryrow entry {
+  background-color: @base_color;
+  border: 1px solid @border_color;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: @text_color;
+  min-width: 200px;
+}
+
+entryrow entry:focus {
+  border-color: @accent_color;
+  box-shadow: 0 0 0 2px alpha(@accent_color, 0.2);
+}
+
+/* Combo Row (replaces Adw.ComboRow) */
+comborow {
+  padding: 12px 16px;
+  min-height: 48px;
+}
+
+comborow combobox {
+  background-color: @base_color;
+  border: 1px solid @border_color;
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: @text_color;
+  min-width: 200px;
+}
+
+comborow combobox:hover {
+  border-color: alpha(@accent_color, 0.5);
+}
+
+comborow combobox:focus {
+  border-color: @accent_color;
+  box-shadow: 0 0 0 2px alpha(@accent_color, 0.2);
+}
+
+/* Switch Row (replaces Adw.SwitchRow) */
+switchrow {
+  padding: 12px 16px;
+  min-height: 48px;
+}
+
+switchrow switch {
+  min-width: 52px;
+  min-height: 28px;
+}
+
+/* Spin Row (replaces Adw.SpinRow) */
+spinrow {
+  padding: 12px 16px;
+  min-height: 48px;
+}
+
+spinrow spinbutton {
+  background-color: @base_color;
+  border: 1px solid @border_color;
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: @text_color;
+  min-width: 100px;
+}
+
+spinrow spinbutton:focus {
+  border-color: @accent_color;
+  box-shadow: 0 0 0 2px alpha(@accent_color, 0.2);
+}
+
+/* ============================================================================
+ * Carousel / Carousel Indicator Dots (replaces Adw.Carousel)
+ * ============================================================================ */
+
+carousel {
+  background-color: transparent;
+}
+
+carouselindicatordots {
+  margin-top: 12px;
+}
+
+carouselindicatordots button {
+  min-width: 8px;
+  min-height: 8px;
+  border-radius: 4px;
+  background-color: alpha(@fg_color, 0.3);
+  border: none;
+  margin: 0 4px;
+}
+
+carouselindicatordots button:checked {
+  background-color: @accent_color;
+  min-width: 24px;
+}
+
+/* ============================================================================
+ * Dialog (replaces Adw.Dialog)
+ * ============================================================================ */
+
+dialog {
+  background-color: @bg_color;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+dialog > box {
+  padding: 24px;
+  min-width: 400px;
+}
+
+dialog headerbar {
+  background-color: transparent;
+  border: none;
+  min-height: 40px;
+}
+
+dialog headerbar .title {
+  font-size: 18px;
+  font-weight: 600;
+  color: @fg_color;
+}
+
+/* ============================================================================
+ * Message Dialog (replaces Adw.MessageDialog)
+ * ============================================================================ */
+
+messagedialog {
+  background-color: @bg_color;
+}
+
+messagedialog .body {
+  color: @fg_color;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+messagedialog .button-box {
+  margin-top: 16px;
+  spacing: 8px;
+}
+
+/* ============================================================================
+ * Toast / Toast Overlay (replaces Adw.Toast, Adw.ToastOverlay)
+ * ============================================================================ */
+
+toastoverlay {
+  background-color: transparent;
+}
+
+toast {
+  background-color: @tooltip_bg_color;
+  color: @tooltip_fg_color;
+  border-radius: 10px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  max-width: 360px;
+}
+
+toast.button {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-weight: 500;
+  margin-left: 12px;
+}
+
+/* ============================================================================
+ * About Dialog (replaces Adw.AboutDialog)
+ * ============================================================================ */
+
+aboutdialog {
+  background-color: @bg_color;
+}
+
+aboutdialog .version {
+  color: alpha(@fg_color, 0.7);
+  font-size: 13px;
+}
+
+aboutdialog .developers,
+aboutdialog .designers,
+aboutdialog .documenters,
+aboutdialog .artists {
+  color: alpha(@fg_color, 0.7);
+  font-size: 13px;
+}
+
+/* ============================================================================
+ * Buttons
+ * ============================================================================ */
+
+button {
+  background-color: transparent;
+  border: 1px solid @border_color;
+  border-radius: 8px;
+  padding: 8px 16px;
+  color: @fg_color;
+  font-weight: 500;
+  transition: all 150ms ease;
+}
+
+button:hover {
+  background-color: alpha(@fg_color, 0.08);
+  border-color: alpha(@fg_color, 0.2);
+}
+
+button:active {
+  background-color: alpha(@fg_color, 0.12);
+}
+
+button:focus {
+  border-color: @accent_color;
+  box-shadow: 0 0 0 2px alpha(@accent_color, 0.2);
+}
+
+button:disabled {
+  opacity: 0.4;
+}
+
+button.suggested-action {
+  background-color: @accent_bg_color;
+  border-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+button.suggested-action:hover {
+  background-color: shade(@accent_bg_color, 0.9);
+  border-color: shade(@accent_bg_color, 0.9);
+}
+
+button.destructive-action {
+  background-color: @destructive_bg_color;
+  border-color: @destructive_bg_color;
+  color: @destructive_fg_color;
+}
+
+button.destructive-action:hover {
+  background-color: shade(@destructive_bg_color, 0.9);
+  border-color: shade(@destructive_bg_color, 0.9);
+}
+
+button.flat {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+button.flat:hover {
+  background-color: alpha(@fg_color, 0.1);
+}
+
+button.flat:active {
+  background-color: alpha(@fg_color, 0.15);
+}
+
+/* ============================================================================
+ * Entries
+ * ============================================================================ */
+
+entry {
+  background-color: @base_color;
+  border: 1px solid @border_color;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: @text_color;
+  min-height: 40px;
+}
+
+entry:focus {
+  border-color: @accent_color;
+  box-shadow: 0 0 0 2px alpha(@accent_color, 0.2);
+}
+
+entry:disabled {
+  background-color: alpha(@base_color, 0.5);
+  color: alpha(@text_color, 0.5);
+}
+
+entry.error {
+  border-color: @destructive_bg_color;
+}
+
+entry.error:focus {
+  border-color: @destructive_bg_color;
+  box-shadow: 0 0 0 2px alpha(@destructive_bg_color, 0.2);
+}
+
+/* ============================================================================
+ * Combo Box
+ * ============================================================================ */
+
+combobox {
+  background-color: @base_color;
+  border: 1px solid @border_color;
+  border-radius: 8px;
+  padding: 6px 12px;
+  color: @text_color;
+  min-height: 40px;
+}
+
+combobox:hover {
+  border-color: alpha(@accent_color, 0.5);
+}
+
+combobox:focus {
+  border-color: @accent_color;
+  box-shadow: 0 0 0 2px alpha(@accent_color, 0.2);
+}
+
+/* ============================================================================
+ * Switch
+ * ============================================================================ */
+
+switch {
+  min-width: 52px;
+  min-height: 28px;
+}
+
+switch slider {
+  min-width: 20px;
+  min-height: 20px;
+  background-color: @fg_color;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+switch:checked slider {
+  background-color: @accent_fg_color;
+}
+
+switch:checked {
+  background-color: @accent_bg_color;
+  border-color: @accent_bg_color;
+}
+
+switch:focus {
+  box-shadow: 0 0 0 2px alpha(@accent_color, 0.2);
+}
+
+/* ============================================================================
+ * Scrollbar
+ * ============================================================================ */
+
+scrollbar {
+  background-color: transparent;
+}
+
+scrollbar slider {
+  background-color: alpha(@fg_color, 0.3);
+  border-radius: 4px;
+  min-width: 8px;
+  min-height: 8px;
+  margin: 4px;
+}
+
+scrollbar slider:hover {
+  background-color: alpha(@fg_color, 0.5);
+}
+
+scrollbar slider:active {
+  background-color: alpha(@fg_color, 0.7);
+}
+
+/* ============================================================================
+ * Separator
+ * ============================================================================ */
+
+separator {
+  background-color: @border_color;
+  min-height: 1px;
+  min-width: 1px;
+  margin: 8px 0;
+}
+
+/* ============================================================================
+ * List / Grid / FlowBox
+ * ============================================================================ */
+
+listview,
+gridview,
+flowbox {
+  background-color: transparent;
+}
+
+listview row,
+gridview cell,
+flowboxchild {
+  background-color: transparent;
+}
+
+listview row:selected,
+gridview cell:selected,
+flowboxchild:selected {
+  background-color: alpha(@accent_color, 0.1);
+}
+
+listview row:hover,
+gridview cell:hover,
+flowboxchild:hover {
+  background-color: alpha(@fg_color, 0.04);
+}
+
+/* ============================================================================
+ * Scrolled Window
+ * ============================================================================ */
+
+scrolledwindow {
+  background-color: transparent;
+}
+
+scrolledwindow > * {
+  background-color: transparent;
+}
+
+/* ============================================================================
+ * Expander
+ * ============================================================================ */
+
+expander {
+  padding: 4px 0;
+}
+
+expander > label {
+  font-weight: 600;
+  color: @fg_color;
+}
+
+/* ============================================================================
+ * Popover / Popover Menu
+ * ============================================================================ */
+
+popover {
+  background-color: @card_bg;
+  border: 1px solid @card_border;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px @card_shadow;
+  padding: 8px;
+}
+
+popover menu {
+  background-color: transparent;
+}
+
+popover menuitem {
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: @fg_color;
+}
+
+popover menuitem:hover {
+  background-color: alpha(@fg_color, 0.1);
+}
+
+popover separator {
+  background-color: @card_border;
+  margin: 4px 8px;
+}
+
+/* ============================================================================
+ * Tooltip
+ * ============================================================================ */
+
+tooltip {
+  background-color: @tooltip_bg_color;
+  color: @tooltip_fg_color;
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* ============================================================================
+ * Progress Bar
+ * ============================================================================ */
+
+progressbar {
+  background-color: alpha(@fg_color, 0.1);
+  border-radius: 4px;
+  min-height: 6px;
+}
+
+progressbar progress {
+  background-color: @accent_color;
+  border-radius: 4px;
+}
+
+/* ============================================================================
+ * Scale / Slider
+ * ============================================================================ */
+
+scale {
+  min-height: 24px;
+}
+
+scale trough {
+  background-color: alpha(@fg_color, 0.1);
+  border-radius: 2px;
+  min-height: 4px;
+}
+
+scale trough progress {
+  background-color: @accent_color;
+  border-radius: 2px;
+}
+
+scale slider {
+  min-width: 16px;
+  min-height: 16px;
+  background-color: @accent_color;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+scale slider:hover {
+  transform: scale(1.2);
+}
+
+scale marks {
+  color: alpha(@fg_color, 0.5);
+  font-size: 11px;
+}
+
+/* ============================================================================
+ * Spinner
+ * ============================================================================ */
+
+spinner {
+  color: @accent_color;
+}
+
+/* ============================================================================
+ * Avatar (for user images)
+ * ============================================================================ */
+
+avatar {
+  background-color: @card_bg;
+  border: 2px solid @card_border;
+  border-radius: 50%;
+}
+
+/* ============================================================================
+ * Picture (for images)
+ * ============================================================================ */
+
+picture {
+  background-color: alpha(@fg_color, 0.05);
+  border-radius: 8px;
+}
+
+/* ============================================================================
+ * Kaori-specific Custom Widgets
+ * ============================================================================ */
+
+/* Manga Grid Cards */
+.manga-card {
+  background-color: @card_bg;
+  border: 1px solid @card_border;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px @card_shadow;
+  transition: all 200ms ease;
+}
+
+.manga-card:hover {
+  box-shadow: 0 8px 24px @card_shadow;
+  transform: translateY(-2px);
+}
+
+.manga-card .cover {
+  border-radius: 12px 12px 0 0;
+  background-color: alpha(@fg_color, 0.05);
+}
+
+.manga-card .title {
+  font-size: 14px;
+  font-weight: 600;
+  color: @fg_color;
+  padding: 12px 12px 4px;
+}
+
+.manga-card .chapter {
+  font-size: 12px;
+  color: alpha(@fg_color, 0.6);
+  padding: 0 12px 12px;
+}
+
+/* Reader Toolbar */
+.reader-toolbar {
+  background-color: @headerbar_bg;
+  border-bottom: 1px solid @headerbar_border;
+  padding: 8px 16px;
+}
+
+.reader-toolbar button {
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 20px;
+}
+
+/* Chapter Panel */
+.chapter-panel {
+  background-color: @bg_color;
+}
+
+.chapter-panel .list {
+  background-color: transparent;
+}
+
+.chapter-panel .row {
+  padding: 12px 16px;
+  border-bottom: 1px solid @card_border;
+}
+
+.chapter-panel .row:last-child {
+  border-bottom: none;
+}
+
+.chapter-panel .row:hover {
+  background-color: alpha(@fg_color, 0.04);
+}
+
+.chapter-panel .row.read {
+  opacity: 0.6;
+}
+
+.chapter-panel .chapter-title {
+  font-weight: 500;
+  color: @fg_color;
+}
+
+.chapter-panel .chapter-meta {
+  font-size: 12px;
+  color: alpha(@fg_color, 0.5);
+}
+
+/* Download Dialog */
+.download-dialog {
+  background-color: @bg_color;
+}
+
+.download-dialog .section {
+  background-color: @card_bg;
+  border: 1px solid @card_border;
+  border-radius: 12px;
+  margin: 8px 0;
+  padding: 16px;
+}
+
+/* Home Page Carousel */
+.home-carousel {
+  margin-bottom: 24px;
+}
+
+.home-carousel .slide {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Library Page */
+.library-page {
+  background-color: @bg_color;
+}
+
+.library-page .category {
+  background-color: @card_bg;
+  border: 1px solid @card_border;
+  border-radius: 12px;
+  margin: 8px 0;
+  box-shadow: 0 1px 3px @card_shadow;
+}
+
+/* Search Page */
+.search-page {
+  background-color: @bg_color;
+}
+
+.search-page .result {
+  padding: 12px 16px;
+  border-bottom: 1px solid @card_border;
+}
+
+.search-page .result:hover {
+  background-color: alpha(@fg_color, 0.04);
+}
+
+/* Settings / Preferences */
+.preferences-dialog {
+  background-color: @bg_color;
+}
+
+.preferences-dialog .section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: @fg_color;
+  margin: 24px 0 12px;
+  padding: 0 16px;
+}
+
+/* ============================================================================
+ * Windows-specific Adjustments
+ * ============================================================================ */
+
+@media (-gtk-platform: win32) {
+  * {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+  }
+
+  headerbar {
+    min-height: 40px;
+  }
+
+  button {
+    min-height: 36px;
+  }
+
+  entry,
+  combobox,
+  spinbutton {
+    min-height: 36px;
+  }
+
+  /* Adjust scrollbar for Windows */
+  scrollbar slider {
+    min-width: 10px;
+    min-height: 10px;
+  }
+}
+
+/* ============================================================================
+ * High Contrast Mode Support
+ * ============================================================================ */
+
+@media (prefers-contrast: high) {
+  :root {
+    @define-color border_color @fg_color;
+    @define-color card_border @fg_color;
+    @define-color card_shadow transparent;
+  }
+
+  button {
+    border-width: 2px;
+  }
+
+  button.suggested-action,
+  button.destructive-action {
+    border-width: 2px;
+  }
+
+  entry:focus,
+  combobox:focus,
+  spinbutton:focus {
+    box-shadow: 0 0 0 3px @fg_color;
+  }
+}
+
+/* ============================================================================
+ * Reduced Motion
+ * ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

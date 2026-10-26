@@ -2,7 +2,8 @@ import asyncio
 from dataclasses import dataclass
 from gettext import gettext as _
 
-from gi.repository import Adw, Gio, GLib, GObject, Gtk
+from gi.repository import Gio, GLib, GObject, Gtk
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 from ...integrations import models
 
@@ -26,7 +27,7 @@ class Reader:
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/reader/page.ui')
-class ReaderPage(Adw.NavigationPage):
+class ReaderPage(NavigationPage):
     __gtype_name__ = "KaoriReaderPage"
 
     manga_model = GObject.Property(type=models.Manga)

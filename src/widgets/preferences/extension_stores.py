@@ -1,9 +1,10 @@
 import asyncio
-from gi.repository import Adw, Gio, Gtk
+from gi.repository import Gio, Gtk
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/preferences/extension_stores.ui')
-class ExtensionStoresDialog(Adw.Dialog):
+class ExtensionStoresDialog(Dialog):
     __gtype_name__ = "KaoriExtensionStoresDialog"
 
     url_entry = Gtk.Template.Child()

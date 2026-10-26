@@ -1,13 +1,14 @@
 import asyncio
 from gettext import gettext as _
 
-from gi.repository import Adw, Gio, GLib, GObject, Gtk, Pango
+from gi.repository import Gio, GLib, GObject, Gtk, Pango
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 from .row import DownloadRow
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/download/page.ui')
-class DownloadsPage(Adw.NavigationPage):
+class DownloadsPage(NavigationPage):
     __gtype_name__ = "KaoriDownloadsPage"
 
     downloads = GObject.Property(type=Gio.ListStore)

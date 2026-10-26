@@ -6,12 +6,12 @@ import time
 import gi
 
 gi.require_version('Gtk', '4.0')
-gi.require_version('Adw', '1')
+# gi.require_version('Adw', '1')  # Removed for Windows port
 from gi.events import GLibEventLoopPolicy
 
 asyncio.set_event_loop_policy(GLibEventLoopPolicy())
 
-from gi.repository import Adw, Gio, GLib
+from gi.repository import Gio, GLib, Gtk, Gdk
 from gql.transport.exceptions import TransportError
 
 from .constants import NAME, DONATE_URL, set_version
@@ -21,10 +21,7 @@ from .widgets import KaoriWindow, build_shortcuts
 from .widgets.preferences import KaoriPreferences
 from .widgets.setup import SetupWindow
 
-if sys.platform == 'linux':
-    from .tray import Entry, Tray
-else:
-    Entry = Tray = None
+from .platform import Entry, Tray, get_autostart_backend, get_background_backend
 
 APPLICATION_ID = 'io.github.riyaniii.Kaori'
 
@@ -44,7 +41,7 @@ def run_until_done(coro, timeout: float) -> None:
         task.cancel()
 
 
-class KaoriApplication(Adw.Application):
+class KaoriApplication(Gtk.Application):
 
     def __init__(self, version: str) -> None:
         super().__init__(application_id=APPLICATION_ID,
@@ -71,7 +68,24 @@ class KaoriApplication(Adw.Application):
         self.suwayomi.download_queue.connect('items-changed',
                                              lambda *args: self.refresh_tray())
 
+        # Platform-specific backends
+        self.autostart_backend = get_autostart_backend()(APPLICATION_ID, NAME)
+        self.background_backend = get_background_backend()(APPLICATION_ID, AUTOSTART_COMMAND)
+
         self.create_action('quit', lambda *args: self.quit(), ['<control>q'])
+
+    def do_startup(self) -> None:
+        Gtk.Application.do_startup(self)
+        self.load_theme()
+
+    def load_theme(self) -> None:
+        """Load the application CSS theme."""
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_resource('/io/github/riyaniii/Kaori/theme.css')
+        display = Gdk.Display.get_default()
+        if display:
+            Gtk.StyleContext.add_provider_for_display(
+                display, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
         self.create_action('preferences', self.on_preferences_action, ['<control>comma'])
         self.create_action('shortcuts', self.on_shortcuts_action,
                            ['<control>question', '<control>slash'])
@@ -103,7 +117,7 @@ class KaoriApplication(Adw.Application):
         run_until_done(self.suwayomi.close(), 5)
         self.set_tray(False)
         self.server.stop()
-        Adw.Application.do_shutdown(self)
+        Gtk.Application.do_shutdown(self)
 
     def on_handle_local_options(self, app, options) -> int:
         if options.contains('background'):
@@ -228,64 +242,18 @@ class KaoriApplication(Adw.Application):
 
     def apply_background_settings(self) -> None:
         local = self.settings.get_string('suwayomi-mode') == 'local'
-        background = (sys.platform == 'linux' and local
-                      and self.settings.get_boolean('run-in-background'))
+        background = local and self.settings.get_boolean('run-in-background')
         autostart = background and self.settings.get_boolean('run-on-startup')
 
         self.set_background_hold(background)
         self.set_tray(background)
         if background:
             self.suwayomi.startPolling()
-        self.sync_autostart(background, autostart)
 
-    def sync_autostart(self, background: bool, autostart: bool) -> None:
-        if sys.platform != 'linux':
-            return
-        if os.path.exists('/.flatpak-info'):
-            self.request_background_portal(background, autostart)
-        else:
-            self.write_autostart_file(autostart)
-
-    def request_background_portal(self, background: bool, autostart: bool) -> None:
-        options = {
-            'reason': GLib.Variant('s', 'Keep the Suwayomi server running'),
-            'background': GLib.Variant('b', background),
-            'autostart': GLib.Variant('b', autostart),
-            'commandline': GLib.Variant('as', AUTOSTART_COMMAND),
-            'dbus-activatable': GLib.Variant('b', False),
-        }
-
-        def done(bus, result):
-            try:
-                bus.call_finish(result)
-            except GLib.Error as e:
-                print("Background portal request failed:", e.message)
-
-        try:
-            bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
-            bus.call(
-                'org.freedesktop.portal.Desktop',
-                '/org/freedesktop/portal/desktop',
-                'org.freedesktop.portal.Background',
-                'RequestBackground',
-                GLib.Variant('(sa{sv})', ('', options)),
-                None, Gio.DBusCallFlags.NONE, -1, None, done)
-        except GLib.Error as e:
-            print("Background portal unavailable:", e.message)
-
-    def write_autostart_file(self, autostart: bool) -> None:
-        path = os.path.join(GLib.get_user_config_dir(), 'autostart',
-                            f'{APPLICATION_ID}.desktop')
-        if autostart:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, 'w') as file:
-                file.write('[Desktop Entry]\n'
-                           'Type=Application\n'
-                           f'Name={NAME}\n'
-                           f'Exec={" ".join(AUTOSTART_COMMAND)}\n'
-                           'X-GNOME-Autostart-enabled=true\n')
-        elif os.path.exists(path):
-            os.remove(path)
+        # Use platform abstraction for autostart
+        self.autostart_backend.set_autostart(autostart, AUTOSTART_COMMAND)
+        # Use platform abstraction for background
+        self.background_backend.request_background(background, autostart, AUTOSTART_COMMAND)
 
     def show_setup_window(self, error: str | None = None) -> None:
         SetupWindow(application=self, error=error).present()
@@ -301,26 +269,20 @@ class KaoriApplication(Adw.Application):
         self.show_setup_window()
 
     def on_about_action(self, *args) -> None:
-        dialog = Adw.AboutDialog(
-            application_name=NAME,
-            application_icon=APPLICATION_ID,
-            developer_name='Riyan Parvez',
+        dialog = Gtk.AboutDialog(
+            program_name=NAME,
+            logo_icon_name=APPLICATION_ID,
             version=self.version,
-            developers=['Riyan Parvez (rini)'],
-            designers=['Riyan Parvez (rini)'],
+            authors=['Riyan Parvez (rini)'],
+            artists=['Riyan Parvez (rini)'],
             copyright='© 2026 Riyan Parvez',
-            issue_url='https://github.com/riyaniii/Kaori/issues',
-            license='GPL-3.0-or-later',
+            comments='A beautiful manga reader for Suwayomi',
+            license_type=Gtk.License.GPL_3_0,
             website='https://github.com/riyaniii/Kaori',
+            website_label='GitHub Repository',
         )
-        dialog.add_link("Buy Me a Coffee", DONATE_URL)
-        dialog.add_credit_section(
-            name="CI added by",
-            people=[
-                "Oween Unda",
-                "Jaish Khan"
-            ]
-        )
+        # Add link to Buy Me a Coffee
+        dialog.add_credit_section("CI added by", ["Oween Unda", "Jaish Khan"])
         dialog.present(self.props.active_window)
 
     def on_preferences_action(self, *args) -> None:

@@ -1,7 +1,8 @@
 import asyncio
 from gettext import gettext as _, ngettext
 
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Gio, GLib, Gtk
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 PRESET_COUNTS = {
     "preset_next": 1,
@@ -19,7 +20,7 @@ def chapter_title(name, number):
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/download/dialog.ui')
-class DownloadDialog(Adw.Dialog):
+class DownloadDialog(Dialog):
     __gtype_name__ = "KaoriDownloadDialog"
 
     from_row = Gtk.Template.Child()

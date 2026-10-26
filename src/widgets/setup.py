@@ -1,7 +1,8 @@
 import asyncio
 import os
 
-from gi.repository import Gtk, Adw, Gio, GLib
+from gi.repository import Gtk, Gio, GLib
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 from ..constants import DONATE_URL, GUIDE_URL
 
@@ -22,7 +23,7 @@ def row_key(row) -> str:
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/setup.ui')
-class SetupWindow(Adw.ApplicationWindow):
+class SetupWindow(ApplicationWindow):
     __gtype_name__ = 'KaoriSetupWindow'
 
     toolbar = Gtk.Template.Child()

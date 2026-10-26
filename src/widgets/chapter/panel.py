@@ -1,6 +1,7 @@
 from gettext import gettext as _
 
-from gi.repository import Gtk, Adw, Gio, GLib, GObject
+from gi.repository import Gtk, Gio, GLib, GObject
+from ..compat import ApplicationWindow, NavigationView, NavigationPage, ToolbarView, HeaderBar, ViewStack, ViewStackPage, ViewSwitcher, ViewSwitcherBar, Clamp, StatusPage, PreferencesDialog, PreferencesPage, PreferencesGroup, ActionRow, EntryRow, ComboRow, SwitchRow, SpinRow, Dialog, MessageDialog, ToastOverlay, Toast, AboutDialog, Carousel, CarouselIndicatorDots, BreakpointBin, Breakpoint, WrapBox, Avatar, Squeezer, Leaflet, Flap, WindowTitle, StyleManager, ColorScheme
 
 from ...integrations import models
 
@@ -30,7 +31,7 @@ def compare(first, second):
 
 
 @Gtk.Template(resource_path='/io/github/riyaniii/Kaori/chapter/panel.ui')
-class ChapterPanel(Adw.NavigationPage):
+class ChapterPanel(NavigationPage):
     __gtype_name__ = "KaoriChapterPanel"
 
     chapter_list = Gtk.Template.Child()

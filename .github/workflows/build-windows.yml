@@ -1,0 +1,106 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Windows (MSYS2 UCRT64)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-gobject
+            mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-blueprint-compiler
+            mingw-w64-ucrt-x86_64-meson
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            git
+
+      - name: Install Python dependencies
+        run: |
+          pip install --no-cache-dir gql diskcache
+
+      - name: Install pystray and pillow (for Windows tray)
+        run: |
+          pip install --no-cache-dir pystray pillow
+
+      - name: Compile blueprints
+        run: |
+          cd src
+          blueprint-compiler batch-compile widgets_converted .
+
+      - name: Configure Meson
+        run: |
+          meson setup build --prefix=/usr
+
+      - name: Build
+        run: |
+          meson compile -C build
+
+      - name: Install to staging
+        run: |
+          DESTDIR=/tmp/staging meson install -C build
+
+      - name: Create portable package
+        run: |
+          cd /tmp/staging
+          # Create a simple portable structure
+          mkdir -p kaori-portable
+          cp -r usr/* kaori-portable/
+          # Copy Suwayomi JAR
+          cp src/Suwayomi-Server-v2.4.2366.jar kaori-portable/share/kaori/Suwayomi-Server.jar 2>/dev/null || true
+          # Create launcher script
+          cat > kaori-portable/kaori.bat << 'EOF'
+          @echo off
+          set PYTHONPATH=%~dp0lib\python3.11\site-packages;%PYTHONPATH%
+          set PATH=%~dp0bin;%PATH%
+          python -m kaori %*
+          EOF
+          # Zip it
+          7z a -r /tmp/kaori-windows-portable.zip kaori-portable/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaori-windows-portable
+          path: /tmp/kaori-windows-portable.zip
+          retention-days: 7
+
+      # Optional: Create NSIS installer
+      - name: Create NSIS installer
+        if: false  # Set to true when NSIS script is ready
+        run: |
+          # Install NSIS
+          choco install nsis -y
+          # Run makensis on installer.nsi
+          # makensis installer.nsi
+
+      - name: Create release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: /tmp/kaori-windows-portable.zip
+          generate_release_notes: true
