@@ -38,19 +38,19 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-pkgconf
             git
+            mingw-w64-ucrt-x86_64-adwaita-icon-theme
+            mingw-w64-ucrt-x86_64-gtk-update-icon-cache
+            mingw-w64-ucrt-x86_64-glib2
+            mingw-w64-ucrt-x86_64-gdk-pixbuf2
 
       - name: Install Python dependencies
         run: |
-          pip install --no-cache-dir gql diskcache
+          pip install --no-cache-dir gql diskcache pystray pillow
 
-      - name: Install pystray and pillow (for Windows tray)
-        run: |
-          pip install --no-cache-dir pystray pillow
-
-      - name: Compile blueprints
+      - name: Compile blueprints (original .blp files - compat layer registers Adw GTypes)
         run: |
           cd src
-          blueprint-compiler batch-compile widgets_converted .
+          blueprint-compiler batch-compile widgets .
 
       - name: Configure Meson
         run: |
@@ -64,19 +64,68 @@ jobs:
         run: |
           DESTDIR=/tmp/staging meson install -C build
 
+      - name: Copy runtime DLLs for portable
+        run: |
+          mkdir -p /tmp/staging/usr/bin
+          # GTK4 + deps
+          cp /ucrt64/bin/libgtk-4.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libgdk-4.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libgobject-2.0-0.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libglib-2.0-0.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libgmodule-2.0-0.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libgio-2.0-0.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libgdk_pixbuf-2.0-0.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libpango-1.0-0.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libpangocairo-1.0-0.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libcairo-2.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libcairo-gobject-2.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libgraphene-1.0-0.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libgcc_s_seh-1.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libstdc++-6.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libwinpthread-1.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libintl-8.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libiconv-2.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libxml2-2.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/liblzma-5.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libzstd.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libz.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libbrotlidec.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libbrotlicommon.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libfreetype-6.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libharfbuzz-0.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libpng16-16.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libjpeg-8.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libtiff-6.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libwebp-7.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libwebpdemux-2.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libwebpmux-3.dll /tmp/staging/usr/bin/
+          # Python
+          cp /ucrt64/bin/python3.11.dll /tmp/staging/usr/bin/
+          # Adwaita icons
+          cp -r /ucrt64/share/icons/Adwaita /tmp/staging/usr/share/icons/ 2>/dev/null || true
+          # GTK modules
+          mkdir -p /tmp/staging/usr/lib/gtk-4.0
+          cp -r /ucrt64/lib/gtk-4.0/* /tmp/staging/usr/lib/gtk-4.0/ 2>/dev/null || true
+          # GIO modules
+          mkdir -p /tmp/staging/usr/lib/gio/modules
+          cp /ucrt64/lib/gio/modules/*.dll /tmp/staging/usr/lib/gio/modules/ 2>/dev/null || true
+
+      - name: Copy Suwayomi JAR
+        run: |
+          mkdir -p /tmp/staging/usr/share/kaori
+          cp src/Suwayomi-Server-v2.4.2366.jar /tmp/staging/usr/share/kaori/Suwayomi-Server.jar
+
       - name: Create portable package
         run: |
           cd /tmp/staging
-          # Create a simple portable structure
           mkdir -p kaori-portable
           cp -r usr/* kaori-portable/
-          # Copy Suwayomi JAR
-          cp src/Suwayomi-Server-v2.4.2366.jar kaori-portable/share/kaori/Suwayomi-Server.jar 2>/dev/null || true
-          # Create launcher script
+          # Create launcher
           cat > kaori-portable/kaori.bat << 'EOF'
           @echo off
           set PYTHONPATH=%~dp0lib\python3.11\site-packages;%PYTHONPATH%
-          set PATH=%~dp0bin;%PATH%
+          set PATH=%~dp0bin;%~dp0lib;%PATH%
+          set GTK_PATH=%~dp0lib\gtk-4.0
           python -m kaori %*
           EOF
           # Zip it
@@ -88,19 +137,3 @@ jobs:
           name: kaori-windows-portable
           path: /tmp/kaori-windows-portable.zip
           retention-days: 7
-
-      # Optional: Create NSIS installer
-      - name: Create NSIS installer
-        if: false  # Set to true when NSIS script is ready
-        run: |
-          # Install NSIS
-          choco install nsis -y
-          # Run makensis on installer.nsi
-          # makensis installer.nsi
-
-      - name: Create release (on tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v1
-        with:
-          files: /tmp/kaori-windows-portable.zip
-          generate_release_notes: true
