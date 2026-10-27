@@ -56,7 +56,7 @@ jobs:
       - name: Compile blueprints (original .blp files - compat layer registers Adw GTypes)
         run: |
           cd src
-          blueprint-compiler batch-compile widgets .
+          blueprint-compiler batch-compile . widgets $(find widgets -name "*.blp" | tr '\n' ' ')
 
       - name: Configure Meson
         run: |
