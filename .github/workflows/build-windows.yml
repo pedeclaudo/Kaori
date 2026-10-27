@@ -82,9 +82,9 @@ jobs:
       - name: Copy runtime DLLs for portable
         run: |
           mkdir -p /tmp/staging/usr/bin
-          # GTK4 + deps
-          cp /ucrt64/bin/libgtk-4.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libgdk-4.dll /tmp/staging/usr/bin/
+          # GTK4 + deps (names with version suffix in MSYS2)
+          cp /ucrt64/bin/libgtk-4-1.dll /tmp/staging/usr/bin/
+          cp /ucrt64/bin/libgdk-4-1.dll /tmp/staging/usr/bin/
           cp /ucrt64/bin/libgobject-2.0-0.dll /tmp/staging/usr/bin/
           cp /ucrt64/bin/libglib-2.0-0.dll /tmp/staging/usr/bin/
           cp /ucrt64/bin/libgmodule-2.0-0.dll /tmp/staging/usr/bin/
