@@ -154,10 +154,12 @@ jobs:
             exit 1
           fi
           echo "=== Zip created: $(ls -la /tmp/kaori-windows-portable.zip) ==="
+          # Copy to GitHub workspace (Windows-visible path)
+          cp /tmp/kaori-windows-portable.zip "$GITHUB_WORKSPACE/kaori-windows-portable.zip"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: kaori-windows-portable
-          path: /tmp/kaori-windows-portable.zip
+          path: ${{ github.workspace }}/kaori-windows-portable.zip
           retention-days: 7
