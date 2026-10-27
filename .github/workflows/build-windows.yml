@@ -83,7 +83,6 @@ jobs:
         run: |
           echo "=== DLLs in /ucrt64/bin/ ==="
           ls -la /ucrt64/bin/*.dll | head -50
-
 - name: Copy runtime DLLs for portable
         run: |
           mkdir -p /tmp/staging/usr/bin
