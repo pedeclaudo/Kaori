@@ -65,6 +65,11 @@ jobs:
         run: |
           meson setup build --prefix=/usr
 
+      - name: Build and install
+        run: |
+          meson compile -C build
+          meson install -C build --destdir /tmp/staging
+
       - name: Copy ITS rules for msgfmt
         run: |
           mkdir -p /usr/share/gettext
@@ -75,9 +80,10 @@ jobs:
           echo "=== DLLs in /ucrt64/bin/ ==="
           ls -la /ucrt64/bin/*.dll | head -50
 
-      - name: Copy runtime DLLs for portable
+      - name: Copy runtime DLLs and Python for portable
         run: |
           mkdir -p /tmp/staging/usr/bin
+          # Copy GTK and dependency DLLs
           for dll in \
             libgtk-4*.dll \
             libgdk-4*.dll \
@@ -110,22 +116,28 @@ jobs:
             libwebp-7.dll \
             libwebpdemux-2.dll \
             libwebpmux-3.dll \
-            python3.11.dll \
             python3*.dll; do
             if ls /ucrt64/bin/$dll 2>/dev/null; then
               cp /ucrt64/bin/$dll /tmp/staging/usr/bin/
             fi
           done
+          # Copy Python executable
+          cp /ucrt64/bin/python3.14.exe /tmp/staging/usr/bin/python.exe 2>/dev/null || \
+          cp /ucrt64/bin/python3.exe /tmp/staging/usr/bin/python.exe 2>/dev/null || true
+          # Copy icons and GTK modules
           cp -r /ucrt64/share/icons/Adwaita /tmp/staging/usr/share/icons/ 2>/dev/null || true
           mkdir -p /tmp/staging/usr/lib/gtk-4.0
           cp -r /ucrt64/lib/gtk-4.0/* /tmp/staging/usr/lib/gtk-4.0/ 2>/dev/null || true
           mkdir -p /tmp/staging/usr/lib/gio/modules
           cp /ucrt64/lib/gio/modules/*.dll /tmp/staging/usr/lib/gio/modules/ 2>/dev/null || true
+          # Copy girepository typelibs (needed for gi.repository)
+          mkdir -p /tmp/staging/usr/lib/girepository-1.0
+          cp -r /ucrt64/lib/girepository-1.0/* /tmp/staging/usr/lib/girepository-1.0/ 2>/dev/null || true
 
-      - name: Copy Suwayomi JAR
+      - name: Verify meson install output
         run: |
-          mkdir -p /tmp/staging/usr/share/kaori
-          cp src/Suwayomi-Server-v2.4.2366.jar /tmp/staging/usr/share/kaori/Suwayomi-Server.jar
+          echo "=== Installed files in staging ==="
+          find /tmp/staging -type f | head -60
 
       - name: Create portable package
         run: |
@@ -133,16 +145,27 @@ jobs:
           cd /tmp/staging
           mkdir -p kaori-portable
           cp -r usr/* kaori-portable/
+
+          # The meson install puts kaori module at usr/share/kaori/kaori/
+          # Move it to lib/python3.14/site-packages/ for the bat
+          mkdir -p kaori-portable/lib/python3.14/site-packages
+          cp -r usr/share/kaori/kaori kaori-portable/lib/python3.14/site-packages/
+          # Copy gresource
+          cp usr/share/kaori/kaori.gresource kaori-portable/lib/python3.14/site-packages/kaori/
+          # Copy entry point script
+          cp usr/bin/kaori kaori-portable/kaori
+
           cat > kaori-portable/kaori.bat << 'EOF'
           @echo off
-          set PYTHONPATH=%~dp0lib\python3.11\site-packages;%PYTHONPATH%
-          set PATH=%~dp0bin;%~dp0lib;%PATH%
+          set PYTHONPATH=%~dp0lib\python3.14\site-packages;%PYTHONPATH%
+          set PATH=%~dp0bin;%PATH%
           set GTK_PATH=%~dp0lib\gtk-4.0
-          python -m kaori %*
+          set GI_TYPELIB_PATH=%~dp0lib\girepository-1.0
+          %~dp0bin\python.exe %~dp0kaori %*
           EOF
           # Debug: check staging content
           echo "=== Staging content ==="
-          find kaori-portable -type f | head -30
+          find kaori-portable -type f | head -40
           echo "=== Total files: $(find kaori-portable -type f | wc -l) ==="
           # Use 7zz (p7zip in MSYS2) or 7z
           if command -v 7zz >/dev/null 2>&1; then
