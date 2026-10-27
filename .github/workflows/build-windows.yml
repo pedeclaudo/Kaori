@@ -129,6 +129,7 @@ jobs:
 
       - name: Create portable package
         run: |
+          set -e
           cd /tmp/staging
           mkdir -p kaori-portable
           cp -r usr/* kaori-portable/
@@ -139,7 +140,20 @@ jobs:
           set GTK_PATH=%~dp0lib\gtk-4.0
           python -m kaori %*
           EOF
-          7z a -r /tmp/kaori-windows-portable.zip kaori-portable/
+          # Debug: check staging content
+          echo "=== Staging content ==="
+          find kaori-portable -type f | head -30
+          echo "=== Total files: $(find kaori-portable -type f | wc -l) ==="
+          # Use 7zz (p7zip in MSYS2) or 7z
+          if command -v 7zz >/dev/null 2>&1; then
+            7zz a -r /tmp/kaori-windows-portable.zip kaori-portable/
+          elif command -v 7z >/dev/null 2>&1; then
+            7z a -r /tmp/kaori-windows-portable.zip kaori-portable/
+          else
+            echo "ERROR: neither 7zz nor 7z found"
+            exit 1
+          fi
+          echo "=== Zip created: $(ls -la /tmp/kaori-windows-portable.zip) ==="
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
