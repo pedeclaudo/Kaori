@@ -64,6 +64,13 @@ jobs:
         run: |
           meson setup build --prefix=/usr
 
+- name: Copy ITS rules for msgfmt
+        run: |
+          # msgfmt (from /usr/bin) looks for ITS rules in /usr/share/gettext/its/
+          # MSYS2 installs them in /ucrt64/share/gettext/its/
+          mkdir -p /usr/share/gettext
+          cp -r /ucrt64/share/gettext/its /usr/share/gettext/ 2>/dev/null || true
+
       - name: Build
         run: |
           meson compile -C build
