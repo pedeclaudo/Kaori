@@ -49,6 +49,7 @@ jobs:
             mingw-w64-ucrt-x86_64-zlib
             mingw-w64-ucrt-x86_64-libtiff
             mingw-w64-ucrt-x86_64-libwebp
+            mingw-w64-ucrt-x86_64-p7zip
 
       - name: Install Python dependencies
         run: |
