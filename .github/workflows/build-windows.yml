@@ -79,43 +79,56 @@ jobs:
         run: |
           DESTDIR=/tmp/staging meson install -C build
 
-      - name: Copy runtime DLLs for portable
+      - name: List available DLLs for debugging
+        run: |
+          echo "=== DLLs in /ucrt64/bin/ ==="
+          ls -la /ucrt64/bin/*.dll | head -50
+
+- name: Copy runtime DLLs for portable
         run: |
           mkdir -p /tmp/staging/usr/bin
-          # GTK4 + deps (names with version suffix in MSYS2)
-          cp /ucrt64/bin/libgtk-4-1.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libgdk-4-1.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libgobject-2.0-0.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libglib-2.0-0.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libgmodule-2.0-0.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libgio-2.0-0.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libgdk_pixbuf-2.0-0.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libpango-1.0-0.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libpangocairo-1.0-0.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libcairo-2.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libcairo-gobject-2.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libgraphene-1.0-0.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libgcc_s_seh-1.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libstdc++-6.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libwinpthread-1.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libintl-8.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libiconv-2.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libxml2-2.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/liblzma-5.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libzstd.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libz.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libbrotlidec.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libbrotlicommon.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libfreetype-6.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libharfbuzz-0.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libpng16-16.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libjpeg-8.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libtiff-6.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libwebp-7.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libwebpdemux-2.dll /tmp/staging/usr/bin/
-          cp /ucrt64/bin/libwebpmux-3.dll /tmp/staging/usr/bin/
-          # Python
-          cp /ucrt64/bin/python3.11.dll /tmp/staging/usr/bin/
+
+          # Copy all DLLs from /ucrt64/bin that GTK4/Python need
+          # Use pattern matching to find the correct names
+          for dll in \
+            libgtk-4*.dll \
+            libgdk-4*.dll \
+            libgobject-2.0*.dll \
+            libglib-2.0*.dll \
+            libgmodule-2.0*.dll \
+            libgio-2.0*.dll \
+            libgdk_pixbuf-2.0*.dll \
+            libpango-1.0*.dll \
+            libpangocairo-1.0*.dll \
+            libcairo-2*.dll \
+            libcairo-gobject-2*.dll \
+            libgraphene-1.0*.dll \
+            libgcc_s_seh-1.dll \
+            libstdc++-6.dll \
+            libwinpthread-1.dll \
+            libintl-8.dll \
+            libiconv-2.dll \
+            libxml2-2.dll \
+            liblzma-5.dll \
+            libzstd.dll \
+            libz.dll \
+            libbrotlidec.dll \
+            libbrotlicommon.dll \
+            libfreetype-6.dll \
+            libharfbuzz-0.dll \
+            libpng16-16.dll \
+            libjpeg-8.dll \
+            libtiff-6.dll \
+            libwebp-7.dll \
+            libwebpdemux-2.dll \
+            libwebpmux-3.dll \
+            python3.11.dll \
+            python3*.dll; do
+            if ls /ucrt64/bin/$dll 2>/dev/null; then
+              cp /ucrt64/bin/$dll /tmp/staging/usr/bin/
+            fi
+          done
+
           # Adwaita icons
           cp -r /ucrt64/share/icons/Adwaita /tmp/staging/usr/share/icons/ 2>/dev/null || true
           # GTK modules
