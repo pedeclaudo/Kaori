@@ -66,29 +66,17 @@ jobs:
 
       - name: Copy ITS rules for msgfmt
         run: |
-          # msgfmt (from /usr/bin) looks for ITS rules in /usr/share/gettext/its/
-          # MSYS2 installs them in /ucrt64/share/gettext/its/
           mkdir -p /usr/share/gettext
           cp -r /ucrt64/share/gettext/its /usr/share/gettext/ 2>/dev/null || true
-
-      - name: Build
-        run: |
-          meson compile -C build
-
-      - name: Install to staging
-        run: |
-          DESTDIR=/tmp/staging meson install -C build
 
       - name: List available DLLs for debugging
         run: |
           echo "=== DLLs in /ucrt64/bin/ ==="
           ls -la /ucrt64/bin/*.dll | head -50
-- name: Copy runtime DLLs for portable
+
+      - name: Copy runtime DLLs for portable
         run: |
           mkdir -p /tmp/staging/usr/bin
-
-          # Copy all DLLs from /ucrt64/bin that GTK4/Python need
-          # Use pattern matching to find the correct names
           for dll in \
             libgtk-4*.dll \
             libgdk-4*.dll \
@@ -127,13 +115,9 @@ jobs:
               cp /ucrt64/bin/$dll /tmp/staging/usr/bin/
             fi
           done
-
-          # Adwaita icons
           cp -r /ucrt64/share/icons/Adwaita /tmp/staging/usr/share/icons/ 2>/dev/null || true
-          # GTK modules
           mkdir -p /tmp/staging/usr/lib/gtk-4.0
           cp -r /ucrt64/lib/gtk-4.0/* /tmp/staging/usr/lib/gtk-4.0/ 2>/dev/null || true
-          # GIO modules
           mkdir -p /tmp/staging/usr/lib/gio/modules
           cp /ucrt64/lib/gio/modules/*.dll /tmp/staging/usr/lib/gio/modules/ 2>/dev/null || true
 
@@ -147,7 +131,6 @@ jobs:
           cd /tmp/staging
           mkdir -p kaori-portable
           cp -r usr/* kaori-portable/
-          # Create launcher
           cat > kaori-portable/kaori.bat << 'EOF'
           @echo off
           set PYTHONPATH=%~dp0lib\python3.11\site-packages;%PYTHONPATH%
@@ -155,7 +138,6 @@ jobs:
           set GTK_PATH=%~dp0lib\gtk-4.0
           python -m kaori %*
           EOF
-          # Zip it
           7z a -r /tmp/kaori-windows-portable.zip kaori-portable/
 
       - name: Upload artifact
