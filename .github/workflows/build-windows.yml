@@ -64,7 +64,7 @@ jobs:
         run: |
           meson setup build --prefix=/usr
 
-- name: Copy ITS rules for msgfmt
+      - name: Copy ITS rules for msgfmt
         run: |
           # msgfmt (from /usr/bin) looks for ITS rules in /usr/share/gettext/its/
           # MSYS2 installs them in /ucrt64/share/gettext/its/
