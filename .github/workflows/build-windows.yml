@@ -65,15 +65,16 @@ jobs:
         run: |
           meson setup build --prefix=/usr
 
-      - name: Build and install
-        run: |
-          meson compile -C build
-          meson install -C build --destdir /tmp/staging
-
       - name: Copy ITS rules for msgfmt
         run: |
           mkdir -p /usr/share/gettext
           cp -r /ucrt64/share/gettext/its /usr/share/gettext/ 2>/dev/null || true
+          ls -la /usr/share/gettext/its/ 2>/dev/null || echo "WARNING: no se copió"
+
+      - name: Build and install
+        run: |
+          meson compile -C build
+          meson install -C build --destdir /tmp/staging
 
       - name: List available DLLs for debugging
         run: |
@@ -186,3 +187,45 @@ jobs:
           name: kaori-windows-portable
           path: ${{ github.workspace }}/kaori-windows-portable.zip
           retention-days: 7
+"@ | Set-Content -Path ".github\workflows\build-windows.yml" -Encoding UTF8
+
+# 2. Commit + push
+git add .github/workflows/build-windows.yml
+git commit -m "fix: move ITS rules copy before build to fix msgfmt failure"
+          # Copy gresource
+          cp usr/share/kaori/kaori.gresource kaori-portable/lib/python3.14/site-packages/kaori/
+          # Copy entry point script
+          cp usr/bin/kaori kaori-portable/kaori
+
+          cat > kaori-portable/kaori.bat << 'EOF'
+          @echo off
+          set PYTHONPATH=%~dp0lib\python3.14\site-packages;%PYTHONPATH%
+          set PATH=%~dp0bin;%PATH%
+          set GTK_PATH=%~dp0lib\gtk-4.0
+          set GI_TYPELIB_PATH=%~dp0lib\girepository-1.0
+          %~dp0bin\python.exe %~dp0kaori %*
+          EOF
+          # Debug: check staging content
+          echo "=== Staging content ==="
+          find kaori-portable -type f | head -40
+          echo "=== Total files: $(find kaori-portable -type f | wc -l) ==="
+          # Use 7zz (p7zip in MSYS2) or 7z
+          if command -v 7zz >/dev/null 2>&1; then
+            7zz a -r /tmp/kaori-windows-portable.zip kaori-portable/
+          elif command -v 7z >/dev/null 2>&1; then
+            7z a -r /tmp/kaori-windows-portable.zip kaori-portable/
+          else
+            echo "ERROR: neither 7zz nor 7z found"
+            exit 1
+          fi
+          echo "=== Zip created: $(ls -la /tmp/kaori-windows-portable.zip) ==="
+          # Copy to GitHub workspace (Windows-visible path)
+          cp /tmp/kaori-windows-portable.zip "$GITHUB_WORKSPACE/kaori-windows-portable.zip"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaori-windows-portable
+          path: ${{ github.workspace }}/kaori-windows-portable.zip
+          retention-days: 7
+"@ | Set-Content -Path ".github\workflows\build-windows.yml" -Encoding UTF8
