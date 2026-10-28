@@ -12,7 +12,7 @@ jobs:
   build:
     name: Build Windows (MSYS2 UCRT64)
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     defaults:
       run:
@@ -23,6 +23,21 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          lfs: true
+
+      - name: Verify Suwayomi Server JAR (LFS)
+        run: |
+          jar=$(ls src/Suwayomi-Server-*.jar 2>/dev/null | head -1)
+          if [ -z "$jar" ]; then
+            echo "ERROR: No Suwayomi-Server JAR found in src/"
+            exit 1
+          fi
+          size=$(stat -c %s "$jar" 2>/dev/null || stat -f %z "$jar")
+          echo "$jar: $size bytes"
+          if [ "$size" -lt 1000000 ]; then
+            echo "ERROR: $jar is a Git LFS pointer, not the real jar" >&2
+            exit 1
+          fi
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -51,15 +66,33 @@ jobs:
             mingw-w64-ucrt-x86_64-libwebp
             p7zip
 
+      - name: Detect Python version
+        id: python-version
+        run: |
+          # Get actual Python version from MSYS2
+          PYTHON_EXE=$(command -v python3)
+          PYTHON_VER=$("$PYTHON_EXE" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+          PYTHON_DLL=$(ls /ucrt64/bin/python3*.dll | head -1 | xargs -n1 basename)
+          echo "python_exe=$PYTHON_EXE" >> $GITHUB_OUTPUT
+          echo "python_ver=$PYTHON_VER" >> $GITHUB_OUTPUT
+          echo "python_dll=$PYTHON_DLL" >> $GITHUB_OUTPUT
+          echo "Detected Python: $PYTHON_VER ($PYTHON_EXE, DLL: $PYTHON_DLL)"
+
       - name: Install Python dependencies
         run: |
-          pip install --no-cache-dir gql diskcache pystray
+          pip install --no-cache-dir gql diskcache pystray httpx babel
           # Pillow installed via MSYS2 (mingw-w64-ucrt-x86_64-python-pillow)
 
-      - name: Compile blueprints (original .blp files - compat layer registers Adw GTypes)
+      - name: Compile blueprints
         run: |
           cd src
-          blueprint-compiler batch-compile . widgets $(find widgets -name "*.blp" | tr '\n' ' ')
+          # Use array to handle spaces in filenames safely
+          mapfile -t blp_files < <(find widgets -name "*.blp" -type f | sort)
+          if [ ${#blp_files[@]} -eq 0 ]; then
+            echo "WARNING: No .blp files found in widgets/"
+          else
+            blueprint-compiler batch-compile . widgets "${blp_files[@]}"
+          fi
 
       - name: Configure Meson
         run: |
@@ -69,35 +102,70 @@ jobs:
         run: |
           mkdir -p /usr/share/gettext
           cp -r /ucrt64/share/gettext/its /usr/share/gettext/ 2>/dev/null || true
-          ls -la /usr/share/gettext/its/ 2>/dev/null || echo "WARNING: no se copió"
+          ls -la /usr/share/gettext/its/ 2>/dev/null || echo "WARNING: no se copió ITS rules"
 
       - name: Build and install
         run: |
           meson compile -C build
           meson install -C build --destdir /tmp/staging
 
+      - name: Smoke test (verify imports work)
+        run: |
+          # Set up environment similar to runtime
+          export PYTHONPATH="/tmp/staging/usr/share/kaori:${PYTHONPATH}"
+          export GI_TYPELIB_PATH="/tmp/staging/usr/lib/girepository-1.0"
+          export GTK_PATH="/tmp/staging/usr/lib/gtk-4.0"
+
+          # Test imports
+          python3 -c "
+import sys
+sys.path.insert(0, '/tmp/staging/usr/share/kaori')
+import gi
+gi.require_version('Gtk', '4.0')
+gi.require_version('Adw', '1')
+from gi.repository import Gio, Gtk, Adw
+print('GI imports OK')
+
+import kaori.main
+print('kaori.main import OK')
+
+# Test gresource loading
+resource_path = '/tmp/staging/usr/share/kaori/kaori.gresource'
+import os
+if os.path.exists(resource_path):
+    resource = Gio.Resource.load(resource_path)
+    resource._register()
+    print('GResource loaded and registered OK')
+else:
+    print('WARNING: gresource not found at', resource_path)
+    sys.exit(1)
+"
+        env:
+          PYTHONPATH: /tmp/staging/usr/share/kaori
+
       - name: List available DLLs for debugging
         run: |
           echo "=== DLLs in /ucrt64/bin/ ==="
-          ls -la /ucrt64/bin/*.dll | head -50
+          ls -la /ucrt64/bin/*.dll | head -60
 
       - name: Copy runtime DLLs and Python for portable
         run: |
           mkdir -p /tmp/staging/usr/bin
-          # Copy GTK and dependency DLLs
+
+          # Core GTK/GLib DLLs (use explicit list with existence check)
           for dll in \
-            libgtk-4*.dll \
-            libgdk-4*.dll \
-            libgobject-2.0*.dll \
-            libglib-2.0*.dll \
-            libgmodule-2.0*.dll \
-            libgio-2.0*.dll \
-            libgdk_pixbuf-2.0*.dll \
-            libpango-1.0*.dll \
-            libpangocairo-1.0*.dll \
-            libcairo-2*.dll \
-            libcairo-gobject-2*.dll \
-            libgraphene-1.0*.dll \
+            libgtk-4-*.dll \
+            libgdk-4-*.dll \
+            libgobject-2.0-*.dll \
+            libglib-2.0-*.dll \
+            libgmodule-2.0-*.dll \
+            libgio-2.0-*.dll \
+            libgdk_pixbuf-2.0-*.dll \
+            libpango-1.0-*.dll \
+            libpangocairo-1.0-*.dll \
+            libcairo-2-*.dll \
+            libcairo-gobject-2-*.dll \
+            libgraphene-1.0-*.dll \
             libgcc_s_seh-1.dll \
             libstdc++-6.dll \
             libwinpthread-1.dll \
@@ -106,9 +174,9 @@ jobs:
             libxml2-2.dll \
             liblzma-5.dll \
             libzstd.dll \
-            libz.dll \
-            libbrotlidec.dll \
-            libbrotlicommon.dll \
+            libz-*.dll \
+            libbrotlidec-*.dll \
+            libbrotlicommon-*.dll \
             libfreetype-6.dll \
             libharfbuzz-0.dll \
             libpng16-16.dll \
@@ -117,28 +185,36 @@ jobs:
             libwebp-7.dll \
             libwebpdemux-2.dll \
             libwebpmux-3.dll \
-            python3*.dll; do
-            if ls /ucrt64/bin/$dll 2>/dev/null; then
-              cp /ucrt64/bin/$dll /tmp/staging/usr/bin/
-            fi
+            "${{ steps.python-version.outputs.python_dll }}"; do
+            for f in /ucrt64/bin/$dll; do
+              [ -f "$f" ] && cp "$f" /tmp/staging/usr/bin/ && echo "Copied: $(basename $f)"
+            done
           done
-          # Copy Python executable
-          cp /ucrt64/bin/python3.14.exe /tmp/staging/usr/bin/python.exe 2>/dev/null || \
+
+          # Copy Python executable (use detected version)
           cp /ucrt64/bin/python3.exe /tmp/staging/usr/bin/python.exe 2>/dev/null || true
+          # Also copy python3.X.exe if it exists
+          cp /ucrt64/bin/python${{ steps.python-version.outputs.python_ver }}.exe /tmp/staging/usr/bin/python3.exe 2>/dev/null || true
+
           # Copy icons and GTK modules
           cp -r /ucrt64/share/icons/Adwaita /tmp/staging/usr/share/icons/ 2>/dev/null || true
           mkdir -p /tmp/staging/usr/lib/gtk-4.0
           cp -r /ucrt64/lib/gtk-4.0/* /tmp/staging/usr/lib/gtk-4.0/ 2>/dev/null || true
           mkdir -p /tmp/staging/usr/lib/gio/modules
           cp /ucrt64/lib/gio/modules/*.dll /tmp/staging/usr/lib/gio/modules/ 2>/dev/null || true
+
           # Copy girepository typelibs (needed for gi.repository)
           mkdir -p /tmp/staging/usr/lib/girepository-1.0
           cp -r /ucrt64/lib/girepository-1.0/* /tmp/staging/usr/lib/girepository-1.0/ 2>/dev/null || true
 
+          # Copy gettext runtime (for locale support)
+          mkdir -p /tmp/staging/usr/share/locale
+          cp -r /ucrt64/share/locale/* /tmp/staging/usr/share/locale/ 2>/dev/null || true
+
       - name: Verify meson install output
         run: |
           echo "=== Installed files in staging ==="
-          find /tmp/staging -type f | head -60
+          find /tmp/staging -type f | head -80
 
       - name: Create portable package
         run: |
@@ -147,27 +223,49 @@ jobs:
           mkdir -p kaori-portable
           cp -r usr/* kaori-portable/
 
-          # The meson install puts kaori module at usr/share/kaori/kaori/
-          # Move it to lib/python3.14/site-packages/ for the bat
-          mkdir -p kaori-portable/lib/python3.14/site-packages
-          cp -r usr/share/kaori/kaori kaori-portable/lib/python3.14/site-packages/
-          # Copy gresource
-          cp usr/share/kaori/kaori.gresource kaori-portable/lib/python3.14/site-packages/kaori/
-          # Copy entry point script
-          cp usr/bin/kaori kaori-portable/kaori
+          # Detect Python version for site-packages path
+          PY_VER="${{ steps.python-version.outputs.python_ver }}"
 
+          # The meson install puts kaori module at usr/share/kaori/kaori/
+          # Move it to lib/pythonX.Y/site-packages/ for the bat
+          mkdir -p kaori-portable/lib/python${PY_VER}/site-packages
+          cp -r usr/share/kaori/kaori kaori-portable/lib/python${PY_VER}/site-packages/
+
+          # Copy gresource
+          if [ -f usr/share/kaori/kaori.gresource ]; then
+            cp usr/share/kaori/kaori.gresource kaori-portable/lib/python${PY_VER}/site-packages/kaori/
+          else
+            echo "WARNING: kaori.gresource not found"
+          fi
+
+          # Copy entry point script
+          if [ -f usr/bin/kaori ]; then
+            cp usr/bin/kaori kaori-portable/kaori
+            chmod +x kaori-portable/kaori
+          else
+            echo "ERROR: kaori executable not found at usr/bin/kaori"
+            exit 1
+          fi
+
+          # Create Windows batch launcher
           cat > kaori-portable/kaori.bat << 'EOF'
           @echo off
-          set PYTHONPATH=%~dp0lib\python3.14\site-packages;%PYTHONPATH%
-          set PATH=%~dp0bin;%PATH%
-          set GTK_PATH=%~dp0lib\gtk-4.0
-          set GI_TYPELIB_PATH=%~dp0lib\girepository-1.0
-          %~dp0bin\python.exe %~dp0kaori %*
+          setlocal enabledelayedexpansion
+
+          set "SCRIPT_DIR=%~dp0"
+          set "PYTHONPATH=%SCRIPT_DIR%lib\python${PY_VER}\site-packages;%PYTHONPATH%"
+          set "PATH=%SCRIPT_DIR%bin;%PATH%"
+          set "GTK_PATH=%SCRIPT_DIR%lib\gtk-4.0"
+          set "GI_TYPELIB_PATH=%SCRIPT_DIR%lib\girepository-1.0"
+
+          "%SCRIPT_DIR%bin\python.exe" "%SCRIPT_DIR%kaori" %*
           EOF
+
           # Debug: check staging content
           echo "=== Staging content ==="
-          find kaori-portable -type f | head -40
+          find kaori-portable -type f | head -50
           echo "=== Total files: $(find kaori-portable -type f | wc -l) ==="
+
           # Use 7zz (p7zip in MSYS2) or 7z
           if command -v 7zz >/dev/null 2>&1; then
             7zz a -r /tmp/kaori-windows-portable.zip kaori-portable/
@@ -187,3 +285,9 @@ jobs:
           name: kaori-windows-portable
           path: "${{ github.workspace }}/kaori-windows-portable.zip"
           retention-days: 7
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "${{ github.workspace }}/kaori-windows-portable.zip"
