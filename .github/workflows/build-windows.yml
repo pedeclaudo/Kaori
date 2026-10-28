@@ -14,10 +14,6 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 45
 
-    defaults:
-      run:
-        shell: msys2 {0}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,18 +22,19 @@ jobs:
           lfs: true
 
       - name: Verify Suwayomi Server JAR (LFS)
+        shell: pwsh
         run: |
-          jar=$(ls src/Suwayomi-Server-*.jar 2>/dev/null | head -1)
-          if [ -z "$jar" ]; then
-            echo "ERROR: No Suwayomi-Server JAR found in src/"
+          $jar = Get-ChildItem src/Suwayomi-Server-*.jar | Select-Object -First 1
+          if (-not $jar) {
+            Write-Error "ERROR: No Suwayomi-Server JAR found in src/"
             exit 1
-          fi
-          size=$(stat -c %s "$jar" 2>/dev/null || stat -f %z "$jar")
-          echo "$jar: $size bytes"
-          if [ "$size" -lt 1000000 ]; then
-            echo "ERROR: $jar is a Git LFS pointer, not the real jar" >&2
+          }
+          $size = $jar.Length
+          Write-Host "$($jar.Name): $size bytes"
+          if ($size -lt 1000000) {
+            Write-Error "ERROR: $($jar.Name) is a Git LFS pointer, not the real jar"
             exit 1
-          fi
+          }
 
       - name: Setup MSYS2
         uses: msys2/setup-msys2@v2
@@ -68,6 +65,7 @@ jobs:
 
       - name: Detect Python version
         id: python-version
+        shell: msys2 {0}
         run: |
           # Get actual Python version from MSYS2
           PYTHON_EXE=$(command -v python3)
@@ -79,11 +77,13 @@ jobs:
           echo "Detected Python: $PYTHON_VER ($PYTHON_EXE, DLL: $PYTHON_DLL)"
 
       - name: Install Python dependencies
+        shell: msys2 {0}
         run: |
           pip install --no-cache-dir gql diskcache pystray httpx babel
           # Pillow installed via MSYS2 (mingw-w64-ucrt-x86_64-python-pillow)
 
       - name: Compile blueprints
+        shell: msys2 {0}
         run: |
           cd src
           # Use array to handle spaces in filenames safely
@@ -95,21 +95,25 @@ jobs:
           fi
 
       - name: Configure Meson
+        shell: msys2 {0}
         run: |
           meson setup build --prefix=/usr
 
       - name: Copy ITS rules for msgfmt
+        shell: msys2 {0}
         run: |
           mkdir -p /usr/share/gettext
           cp -r /ucrt64/share/gettext/its /usr/share/gettext/ 2>/dev/null || true
           ls -la /usr/share/gettext/its/ 2>/dev/null || echo "WARNING: no se copió ITS rules"
 
       - name: Build and install
+        shell: msys2 {0}
         run: |
           meson compile -C build
           meson install -C build --destdir /tmp/staging
 
       - name: Smoke test (verify imports work)
+        shell: msys2 {0}
         run: |
           # Set up environment similar to runtime
           export PYTHONPATH="/tmp/staging/usr/share/kaori:${PYTHONPATH}"
@@ -144,11 +148,13 @@ jobs:
           PYTHONPATH: /tmp/staging/usr/share/kaori
 
       - name: List available DLLs for debugging
+        shell: msys2 {0}
         run: |
           echo "=== DLLs in /ucrt64/bin/ ==="
           ls -la /ucrt64/bin/*.dll | head -60
 
       - name: Copy runtime DLLs and Python for portable
+        shell: msys2 {0}
         run: |
           mkdir -p /tmp/staging/usr/bin
 
@@ -212,11 +218,13 @@ jobs:
           cp -r /ucrt64/share/locale/* /tmp/staging/usr/share/locale/ 2>/dev/null || true
 
       - name: Verify meson install output
+        shell: msys2 {0}
         run: |
           echo "=== Installed files in staging ==="
           find /tmp/staging -type f | head -80
 
       - name: Create portable package
+        shell: msys2 {0}
         run: |
           set -e
           cd /tmp/staging
