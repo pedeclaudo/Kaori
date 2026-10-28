@@ -116,30 +116,30 @@ jobs:
           export GI_TYPELIB_PATH="/tmp/staging/usr/lib/girepository-1.0"
           export GTK_PATH="/tmp/staging/usr/lib/gtk-4.0"
 
-          # Test imports
-          python3 -c "
-import sys
-sys.path.insert(0, '/tmp/staging/usr/share/kaori')
-import gi
-gi.require_version('Gtk', '4.0')
-gi.require_version('Adw', '1')
-from gi.repository import Gio, Gtk, Adw
-print('GI imports OK')
+          # Test imports using heredoc to avoid quoting/indentation issues
+          python3 <<'PYEOF'
+          import sys
+          sys.path.insert(0, '/tmp/staging/usr/share/kaori')
+          import gi
+          gi.require_version('Gtk', '4.0')
+          gi.require_version('Adw', '1')
+          from gi.repository import Gio, Gtk, Adw
+          print('GI imports OK')
 
-import kaori.main
-print('kaori.main import OK')
+          import kaori.main
+          print('kaori.main import OK')
 
-# Test gresource loading
-resource_path = '/tmp/staging/usr/share/kaori/kaori.gresource'
-import os
-if os.path.exists(resource_path):
-    resource = Gio.Resource.load(resource_path)
-    resource._register()
-    print('GResource loaded and registered OK')
-else:
-    print('WARNING: gresource not found at', resource_path)
-    sys.exit(1)
-"
+          # Test gresource loading
+          resource_path = '/tmp/staging/usr/share/kaori/kaori.gresource'
+          import os
+          if os.path.exists(resource_path):
+              resource = Gio.Resource.load(resource_path)
+              resource._register()
+              print('GResource loaded and registered OK')
+          else:
+              print('WARNING: gresource not found at', resource_path)
+              sys.exit(1)
+          PYEOF
         env:
           PYTHONPATH: /tmp/staging/usr/share/kaori
 
@@ -247,8 +247,8 @@ else:
             exit 1
           fi
 
-          # Create Windows batch launcher
-          cat > kaori-portable/kaori.bat << 'EOF'
+          # Create Windows batch launcher (use unquoted EOF to allow $PY_VER expansion)
+          cat > kaori-portable/kaori.bat << EOF
           @echo off
           setlocal enabledelayedexpansion
 
